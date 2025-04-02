@@ -162,7 +162,8 @@ const ObjectComponents = { tree: Tree, shrub: Shrub, grass: Grass };
 // --- Scene Component (Manages Data State and 3D Primitives) ---
 const SceneWithLogic = forwardRef(({
     selectedObjectId, globalAge, brushSize, // Props for rendering/API
-    onObjectSelect, onObjectPointerDown, onGridPointerDown // Callbacks for components
+    onObjectSelect, onObjectPointerDown, onGridPointerDown, // Callbacks for components
+    onInteractionEnd // Need this callback for resizeGrid
 }, ref) => {
     // --- State ---
     const [heightData, setHeightData] = useState(() => getInitialHeightData(INITIAL_GRID_WIDTH, INITIAL_GRID_HEIGHT));
@@ -298,19 +299,61 @@ const SceneWithLogic = forwardRef(({
             return { newWidth: currentW, newHeight: currentH };
         },
         resizeGrid: (newWidth, newHeight) => {
-            // ... (resize height/color data as before) ...
-            const oldW = gridWidth; const oldH = gridHeight; // Store old dims before state update
-            // Update height/color state...
+             console.log(`Resizing grid imperative call to ${newWidth}x${newHeight}`);
+             const oldWidth = gridWidth; // Capture dimensions *before* potential state update
+             const oldHeight = gridHeight;
+             const oldHData = heightData;
+             const oldCData = colorData;
 
-            // Filter objects based on new world bounds
-            const minWorldX = -newWidth / 2 * CELL_SIZE;
-            const maxWorldX = newWidth / 2 * CELL_SIZE;
-            const minWorldZ = -newHeight / 2 * CELL_SIZE;
-            const maxWorldZ = newHeight / 2 * CELL_SIZE;
-            setObjects(prev => prev.filter(obj =>
-                obj.worldX >= minWorldX && obj.worldX < maxWorldX &&
-                obj.worldZ >= minWorldZ && obj.worldZ < maxWorldZ
-            ));
+             const newHData = [];
+             const newCData = [];
+
+             for (let z = 0; z < newHeight; z++) {
+                newHData[z] = [];
+                newCData[z] = [];
+                for (let x = 0; x < newWidth; x++) {
+                    if (x < oldWidth && z < oldHeight) {
+                        newHData[z][x] = oldHData[z][x];
+                        newCData[z][x] = oldCData[z][x];
+                    } else {
+                        const h = getInitialHeight(x, z, newWidth, newHeight);
+                        newHData[z][x] = h;
+                        // Simplified color setting (copy from getInitialColorData logic)
+                        const hr = h / INITIAL_MAX_HEIGHT;
+                        const ci = Math.min(COLORS.length - 1, Math.max(0, Math.floor(hr * (COLORS.length - 2)) + 1));
+                        newCData[z][x] = h < 0.05 ? COLORS[0] : COLORS[ci];
+                    }
+                }
+             }
+             // Update state AFTER calculations are done
+             setHeightData(newHData);
+             setColorData(newCData);
+
+             // Filter objects based on new world bounds
+             // Calculate bounds correctly relative to the origin (0,0)
+             const minWorldX = -newWidth / 2 * CELL_SIZE;
+             const maxWorldX = newWidth / 2 * CELL_SIZE;
+             const minWorldZ = -newHeight / 2 * CELL_SIZE;
+             const maxWorldZ = newHeight / 2 * CELL_SIZE;
+
+             console.log(`Filtering objects within X: [${minWorldX}, ${maxWorldX}), Z: [${minWorldZ}, ${maxWorldZ})`);
+
+             setObjects(prev => {
+                const filtered = prev.filter(obj =>
+                    obj.worldX >= minWorldX && obj.worldX < maxWorldX &&
+                    obj.worldZ >= minWorldZ && obj.worldZ < maxWorldZ
+                );
+                console.log(`Filtered ${prev.length - filtered.length} objects.`);
+                return filtered;
+             });
+
+             // Call interaction end to potentially reset modes/selections in parent
+             if (onInteractionEnd) {
+                console.log("Calling onInteractionEnd after resize");
+                onInteractionEnd();
+             } else {
+                 console.warn("onInteractionEnd not passed to SceneWithLogic for resize");
+             }
         },
         // Object Manipulation
         addObject: (newObjectData) => {
@@ -329,7 +372,7 @@ const SceneWithLogic = forwardRef(({
         // Terrain Modification
         applyTerrainBrush: applyTerrainBrush,
 
-   }), [heightData, colorData, objects, gridWidth, gridHeight, brushSize, applyTerrainBrush, getGroundHeightAtWorld]);
+   }), [heightData, colorData, objects, gridWidth, gridHeight, brushSize, applyTerrainBrush, getGroundHeightAtWorld, onInteractionEnd]);
 
 
     // --- Render Logic ---
@@ -630,9 +673,12 @@ export default function PlanEditor() {
     const handleSelectObject = useCallback((id) => { setSelectedObjectId(id); setAddModeObjectType(null); }, []); // Callback *from* Experience
     const handleRemoveSelected = () => { if (selectedObjectId !== null) { sceneLogicRef.current?.removeObject(selectedObjectId); setSelectedObjectId(null); } };
     const handleInteractionEnd = useCallback(() => {
+        
+        console.log("handleInteractionEnd called in PlanEditor");
         // Reset add mode after placing an object
         setAddModeObjectType(null);
         // Keep selection after move/drag? Current logic deselects after instant move, keeps after drag.
+        setSelectedObjectId(null);
     }, []); // Callback *from* Experience
 
     const handleResize = () => {
