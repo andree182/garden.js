@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useRef, forwardRef, useImperativeHandle, useEffect } from 'react';
-import { Canvas, useThree } from '@react-three/fiber';
+import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera, Box, Plane } from '@react-three/drei';
 import * as THREE from 'three';
 
@@ -66,16 +66,39 @@ const GridCell = React.memo(({ x, z, height, color, onPointerDown, gridWidth, gr
     );
 });
 
-// Base wrapper for objects to handle common interactions
 const ObjectBase = ({ children, position, onSelect, onPointerDown, objectId, type }) => {
+    const groupRef = useRef(); // Ref for the group to animate
+
+    // Add random offset for animation variation (ensures it's created only once per instance)
+    const [animOffset] = useState(() => Math.random() * Math.PI * 2); // Random phase offset
+    const [freqMult] = useState(() => 0.8 + Math.random() * 0.4); // Slight frequency variation
+
+    useFrame((state) => {
+        const time = state.clock.elapsedTime;
+        const baseFrequency = 3; // How fast the wiggle is
+        const baseAmplitude = 0.1; // How much it wiggles (in radians)
+
+        if (groupRef.current) {
+            // Apply a slight rotation wiggle on X and Z axes
+            groupRef.current.rotation.x = Math.sin(time * baseFrequency * freqMult + animOffset) * baseAmplitude;
+            // Slightly different calculation for Z for less uniformity
+            groupRef.current.rotation.z = Math.cos(time * baseFrequency * freqMult * 0.9 + animOffset * 1.1) * baseAmplitude * 0.8;
+            // Keep Y rotation 0 unless you want them to spin
+             groupRef.current.rotation.y = 0;
+        }
+    });
+
     const handlePointerDown = useCallback((e) => {
-        // Allow event to bubble up
-        onPointerDown(e, objectId, type); // Pass ID and type up
-        onSelect(); // Select on pointer down
+        // Stop propagation here IF we are sure we never want clicks to pass through objects
+        // For now, let Experience handle it based on mode
+        // e.stopPropagation();
+        onPointerDown(e, objectId, type);
+        onSelect();
     }, [onPointerDown, objectId, type, onSelect]);
 
+    // Attach the ref to the group
     return (
-        <group position={position} onPointerDown={handlePointerDown}>
+        <group ref={groupRef} position={position} onPointerDown={handlePointerDown}>
             {children}
         </group>
     );
