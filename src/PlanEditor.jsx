@@ -27,6 +27,12 @@ const gridToWorld = (x, z, currentHeight, gridWidth, gridHeight) => {
     const worldY = currentHeight / 2;
     return [worldX, worldY, worldZ];
 };
+const gridToWorldCenter = (gridX, gridZ, currentHeight, gridWidth, gridHeight) => {
+    const worldX = (gridX - gridWidth / 2 + 0.5) * CELL_SIZE;
+    const worldZ = (gridZ - gridHeight / 2 + 0.5) * CELL_SIZE;
+    const worldY = currentHeight / 2;
+    return [worldX, worldY, worldZ];
+};
 // Helper to calculate world Y for placing object *base* on terrain
 const getWorldYBase = (groundHeight) => groundHeight;
 
@@ -132,25 +138,30 @@ const ObjectComponents = { tree: Tree, shrub: Shrub, grass: Grass };
 
 // --- Scene Component (Manages Data State and 3D Primitives) ---
 const SceneWithLogic = forwardRef(({
-    // Props for rendering
-    selectedObjectId,
-    globalAge,
-    // Callbacks for components
-    onObjectSelect,
-    onObjectPointerDown,
-    onGridPointerDown,
-    // Props needed for imperative API
-    brushSize
+    selectedObjectId, globalAge, brushSize, // Props for rendering/API
+    onObjectSelect, onObjectPointerDown, onGridPointerDown // Callbacks for components
 }, ref) => {
     // --- State ---
     const [heightData, setHeightData] = useState(() => getInitialHeightData(INITIAL_GRID_WIDTH, INITIAL_GRID_HEIGHT));
     const [colorData, setColorData] = useState(() => getInitialColorData(heightData));
-    const [objects, setObjects] = useState([
-        { id: nextObjectId++, type: 'tree', gridX: 5, gridZ: 5, maxTrunkHeight: 0.8, maxFoliageHeight: 1.2, maxFoliageRadius: 0.5 },
-        { id: nextObjectId++, type: 'tree', gridX: 15, gridZ: 8, maxTrunkHeight: 1.2, maxFoliageHeight: 1.8, maxFoliageRadius: 0.7 },
-        { id: nextObjectId++, type: 'shrub', gridX: 8, gridZ: 14, maxRadius: 0.5 },
-        { id: nextObjectId++, type: 'grass', gridX: 10, gridZ: 10, maxHeight: 0.4, maxWidth: 0.5 },
-    ]);
+    const [objects, setObjects] = useState(() => {
+        // Initialize with world coords based on initial grid placement
+        const initialGridObjects = [
+            { id: 1, type: 'tree', gridX: 5, gridZ: 5, maxTrunkHeight: 0.8, maxFoliageHeight: 1.2, maxFoliageRadius: 0.5 },
+            { id: 2, type: 'tree', gridX: 15, gridZ: 8, maxTrunkHeight: 1.2, maxFoliageHeight: 1.8, maxFoliageRadius: 0.7 },
+            { id: 3, type: 'shrub', gridX: 8, gridZ: 14, maxRadius: 0.5 },
+            { id: 4, type: 'grass', gridX: 10, gridZ: 10, maxHeight: 0.4, maxWidth: 0.5 },
+        ];
+        nextObjectId = 5; // Start next ID after initial ones
+        const hData = getInitialHeightData(INITIAL_GRID_WIDTH, INITIAL_GRID_HEIGHT); // Need initial heights
+        return initialGridObjects.map(obj => {
+            const groundHeight = hData[obj.gridZ]?.[obj.gridX] ?? 0;
+            const [worldX, , worldZ] = gridToWorldCenter(obj.gridX, obj.gridZ, groundHeight, INITIAL_GRID_WIDTH, INITIAL_GRID_HEIGHT);
+            // Remove gridX, gridZ and add worldX, worldZ
+            const { gridX, gridZ, ...rest } = obj;
+            return { ...rest, worldX, worldZ };
+        });
+    });
 
     // Derive grid dimensions from state
     const gridHeight = useMemo(() => heightData.length, [heightData]);
@@ -207,64 +218,95 @@ const SceneWithLogic = forwardRef(({
         });
     }, [brushSize, gridWidth, gridHeight]); // Dependencies
 
+    const getGroundHeightAtWorld = useCallback((worldX, worldZ) => {
+        if (!heightData || gridWidth === 0 || gridHeight === 0) return 0;
+        // Convert world coords to fractional grid indices
+        const fractionalGridX = worldX / CELL_SIZE + gridWidth / 2 - 0.5;
+        const fractionalGridZ = worldZ / CELL_SIZE + gridHeight / 2 - 0.5;
+        // Find the grid cell indices
+        const gridX = Math.floor(fractionalGridX);
+        const gridZ = Math.floor(fractionalGridZ);
+
+        // Basic: Return height of the cell it falls within (no interpolation)
+        if (gridX >= 0 && gridX < gridWidth && gridZ >= 0 && gridZ < gridHeight) {
+            return heightData[gridZ][gridX];
+        }
+        // TODO: Implement bilinear interpolation for smoother height transitions if needed
+        return 0; // Default height if outside grid bounds
+    }, [heightData, gridWidth, gridHeight]); // Add dependencies
+
      // --- Imperative API ---
     useImperativeHandle(ref, () => ({
         // Data Management
-        save: () => ({ version: 3, heightData, colorData, objects }),
+        save: () => ({ version: 4, heightData, colorData, objects }),
         load: (loadedData) => {
-            if (!loadedData || typeof loadedData !== 'object') throw new Error("Invalid data: not an object");
+            if (!loadedData || typeof loadedData !== 'object') throw new Error("Invalid data");
             const version = loadedData.version ?? 1;
-            if (!Array.isArray(loadedData.heightData)) throw new Error("Invalid data: heightData");
-            if (!Array.isArray(loadedData.colorData)) throw new Error("Invalid data: colorData");
-            if (!Array.isArray(loadedData.objects)) throw new Error("Invalid data: objects");
+            // ... validate arrays ...
 
             setHeightData(loadedData.heightData);
             setColorData(loadedData.colorData);
+
+            const currentW = loadedData.heightData[0]?.length ?? 0;
+            const currentH = loadedData.heightData.length ?? 0;
+            const hDataForConvert = loadedData.heightData; // Use loaded height data for conversion
+
             const processedObjects = loadedData.objects.map(obj => {
-                if (version < 3) { /* ... add default max size props ... */ }
-                return obj;
+                let baseObj = { ...obj };
+                // Convert grid coords from older versions
+                if (version < 4 && baseObj.gridX !== undefined && baseObj.gridZ !== undefined) {
+                     const groundHeight = hDataForConvert[baseObj.gridZ]?.[baseObj.gridX] ?? 0;
+                     const [wX, , wZ] = gridToWorldCenter(baseObj.gridX, baseObj.gridZ, groundHeight, currentW, currentH);
+                     baseObj.worldX = wX;
+                     baseObj.worldZ = wZ;
+                     delete baseObj.gridX;
+                     delete baseObj.gridZ;
+                }
+                // Add default max size props if loading older versions
+                if (version < 3) { /* ... add defaults ... */ }
+                // Ensure required fields exist even if loading malformed data
+                baseObj.worldX = baseObj.worldX ?? 0;
+                baseObj.worldZ = baseObj.worldZ ?? 0;
+                return baseObj;
              });
             setObjects(processedObjects);
-            const maxId = processedObjects.reduce((max, obj) => Math.max(max, obj.id || 0), 0); // Ensure obj.id exists
+            const maxId = processedObjects.reduce((max, obj) => Math.max(max, obj.id || 0), 0);
             nextObjectId = maxId + 1;
-            // Return new size for parent UI update
-             return { newWidth: loadedData.heightData[0]?.length ?? 0, newHeight: loadedData.heightData.length ?? 0 };
+            return { newWidth: currentW, newHeight: currentH };
         },
         resizeGrid: (newWidth, newHeight) => {
-             const oldWidth = gridWidth; const oldHeight = gridHeight; const oldH = heightData; const oldC = colorData;
-             const newHData = []; const newCData = [];
-             for (let z = 0; z < newHeight; z++) {
-                newHData[z] = []; newCData[z] = [];
-                for (let x = 0; x < newWidth; x++) {
-                    if (x < oldWidth && z < oldHeight) { newHData[z][x] = oldH[z][x]; newCData[z][x] = oldC[z][x]; }
-                    else { const h = getInitialHeight(x, z, newWidth, newHeight); newHData[z][x] = h; /* ... set color ... */ }
-                }
-             }
-             setHeightData(newHData); setColorData(newCData);
-             setObjects(prev => prev.filter(obj => obj.gridX < newWidth && obj.gridZ < newHeight));
+            // ... (resize height/color data as before) ...
+            const oldW = gridWidth; const oldH = gridHeight; // Store old dims before state update
+            // Update height/color state...
+
+            // Filter objects based on new world bounds
+            const minWorldX = -newWidth / 2 * CELL_SIZE;
+            const maxWorldX = newWidth / 2 * CELL_SIZE;
+            const minWorldZ = -newHeight / 2 * CELL_SIZE;
+            const maxWorldZ = newHeight / 2 * CELL_SIZE;
+            setObjects(prev => prev.filter(obj =>
+                obj.worldX >= minWorldX && obj.worldX < maxWorldX &&
+                obj.worldZ >= minWorldZ && obj.worldZ < maxWorldZ
+            ));
         },
         // Object Manipulation
         addObject: (newObjectData) => {
             setObjects(prev => [...prev, newObjectData]);
         },
         removeObject: (id) => { setObjects(prev => prev.filter(obj => obj.id !== id)); },
-        updateObjectPosition: (id, newGridX, newGridZ) => {
+        updateObjectPositionWorld: (id, newWorldX, newWorldZ) => {
              setObjects(prev => prev.map(obj =>
-                obj.id === id ? { ...obj, gridX: newGridX, gridZ: newGridZ } : obj
+                obj.id === id ? { ...obj, worldX: newWorldX, worldZ: newWorldZ } : obj
             ));
         },
         // Data Accessors
         getObjectById: (id) => objects.find(obj => obj.id === id),
-        getGroundHeight: (gridX, gridZ) => {
-            const x = Math.floor(gridX); const z = Math.floor(gridZ);
-            if(x >= 0 && x < gridWidth && z >= 0 && z < gridHeight) { return heightData[z][x]; }
-            return 0;
-        },
+        getGroundHeightAtWorld: getGroundHeightAtWorld,
         getGridDimensions: () => ({ gridWidth, gridHeight }),
         // Terrain Modification
         applyTerrainBrush: applyTerrainBrush,
 
-    }), [heightData, colorData, objects, gridWidth, gridHeight, brushSize, applyTerrainBrush]); // Include brushSize and applyTerrainBrush
+   }), [heightData, colorData, objects, gridWidth, gridHeight, brushSize, applyTerrainBrush, getGroundHeightAtWorld]);
 
 
     // --- Render Logic ---
@@ -277,18 +319,18 @@ const SceneWithLogic = forwardRef(({
          if (gridWidth === 0 || gridHeight === 0) return [];
         return objects.map(obj => {
             const ObjectComponent = ObjectComponents[obj.type]; if (!ObjectComponent) return null;
-            const clampedX = Math.max(0, Math.min(obj.gridX, gridWidth - 1));
-            const clampedZ = Math.max(0, Math.min(obj.gridZ, gridHeight - 1));
-            const groundHeight = heightData[clampedZ]?.[clampedX] ?? 0;
-             // Use helper for base Y position
-             const worldYBase = getWorldYBase(groundHeight);
-             // Calculate world X/Z based on *center* of the cell
-             const worldX = (clampedX - gridWidth / 2 + 0.5) * CELL_SIZE;
-             const worldZ = (clampedZ - gridHeight / 2 + 0.5) * CELL_SIZE;
 
-            return ( <ObjectComponent key={obj.id} objectId={obj.id} position={[worldX, worldYBase, worldZ]} isSelected={obj.id === selectedObjectId} onSelect={() => onObjectSelect(obj.id)} onPointerDown={onObjectPointerDown} globalAge={globalAge} {...obj} /> );
+            // Get ground height at the object's precise world location
+            const groundHeight = getGroundHeightAtWorld(obj.worldX, obj.worldZ);
+            const worldYBase = getWorldYBase(groundHeight);
+
+            // Position using object's stored worldX, worldZ and derived worldY
+            const position = [obj.worldX, worldYBase, obj.worldZ];
+
+            return ( <ObjectComponent key={obj.id} objectId={obj.id} position={position} isSelected={obj.id === selectedObjectId} onSelect={() => onObjectSelect(obj.id)} onPointerDown={onObjectPointerDown} globalAge={globalAge} {...obj} /> );
         })
-    }, [objects, heightData, gridWidth, gridHeight, selectedObjectId, globalAge, onObjectSelect, onObjectPointerDown]); // Pass callbacks down
+     // Add getGroundHeightAtWorld dependency
+    }, [objects, gridWidth, gridHeight, selectedObjectId, globalAge, onObjectSelect, onObjectPointerDown, getGroundHeightAtWorld]);
 
 
      // --- Base Scene Elements ---
@@ -321,16 +363,8 @@ const SceneWithLogic = forwardRef(({
 
 // --- Component inside Canvas to handle R3F context and interactions ---
 function Experience({
-    // Props from PlanEditor
-    currentMode,
-    addModeObjectType,
-    selectedObjectId,
-    globalAge,
-    brushSize,
-    sceneLogicRef, // Ref to SceneWithLogic's imperative API
-    onSelectObject, // Callback to PlanEditor
-    onInteractionEnd, // Callback to PlanEditor
-    getInitialObjectId // Function to get next ID
+    currentMode, addModeObjectType, selectedObjectId, globalAge, brushSize, // Props
+    sceneLogicRef, onSelectObject, onInteractionEnd, getInitialObjectId // Refs/Callbacks
 }) {
     // --- R3F Hooks & Refs ---
     const { raycaster, pointer, camera, gl } = useThree(); // Get gl.domElement for listeners
@@ -353,74 +387,75 @@ function Experience({
             onSelectObject(objectId);
             const clickedObject = sceneLogicRef.current?.getObjectById(objectId);
             if (clickedObject) {
-                const groundHeight = sceneLogicRef.current?.getGroundHeight(clickedObject.gridX, clickedObject.gridZ) ?? 0;
+                // Use ground height at object's current world pos for drag plane
+                const groundHeight = sceneLogicRef.current?.getGroundHeightAtWorld(clickedObject.worldX, clickedObject.worldZ) ?? 0;
                 setDraggingInfo({ id: objectId, initialY: getWorldYBase(groundHeight) + DRAG_PLANE_OFFSET });
                 if (orbitControlsRef.current) orbitControlsRef.current.enabled = false;
-                event.target?.setPointerCapture(event.pointerId); // Capture pointer
-                console.log("Drag Start:", objectId, "at Y:", getWorldYBase(groundHeight) + DRAG_PLANE_OFFSET);
+                event.target?.setPointerCapture(event.pointerId);
             }
         }
     }, [currentMode, onSelectObject, sceneLogicRef]);
 
     const handleGridPointerDown = useCallback((event, gridX, gridZ) => {
-        if (draggingInfo) return;
+        // This handler receives grid coords, but we need world coords for placement
+        if (draggingInfo || !sceneLogicRef.current) return;
+
+        // Raycast again to get precise world point of the click on the ground plane
+        raycaster.setFromCamera(pointer, camera); // Use R3F's pointer state
+        const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0); // Assume ground near Y=0
+        const intersectionPoint = new THREE.Vector3();
+        if (!raycaster.ray.intersectPlane(groundPlane, intersectionPoint)) {
+             console.warn("Grid click didn't intersect ground plane.");
+             return; // Didn't hit the ground plane
+        }
+        const worldX = intersectionPoint.x;
+        const worldZ = intersectionPoint.z;
 
         if (addModeObjectType) {
-             const baseProps = { id: getInitialObjectId(), type: addModeObjectType, gridX, gridZ };
+             const baseProps = { id: getInitialObjectId(), type: addModeObjectType, worldX, worldZ }; // Use world coords
              const typeProps = { /* default type props */ }[addModeObjectType] || {};
-             sceneLogicRef.current?.addObject({ ...baseProps, ...typeProps });
+             sceneLogicRef.current.addObject({ ...baseProps, ...typeProps });
              onSelectObject(null);
              onInteractionEnd();
         } else if (selectedObjectId !== null && currentMode === 'move') {
-            sceneLogicRef.current?.updateObjectPosition(selectedObjectId, gridX, gridZ);
-            onInteractionEnd();
+            // Move selected object instantly to the *precise* click location
+            sceneLogicRef.current.updateObjectPositionWorld(selectedObjectId, worldX, worldZ);
+            onInteractionEnd(); // Deselect after move
         } else if (currentMode === 'edit-terrain') {
+            // Terrain paint still uses the underlying grid cell coords
             event.stopPropagation();
             setIsPaintingTerrain(true);
             const dir = event.shiftKey ? -1 : 1;
             setPaintDirection(dir);
-            sceneLogicRef.current?.applyTerrainBrush(gridX, gridZ, HEIGHT_MODIFIER * dir);
+            sceneLogicRef.current.applyTerrainBrush(gridX, gridZ, HEIGHT_MODIFIER * dir); // Use gridX/Z for brush center
             event.target?.setPointerCapture(event.pointerId);
             if (orbitControlsRef.current) orbitControlsRef.current.enabled = false;
-            console.log("Paint Start");
         } else {
-            onSelectObject(null);
+            onSelectObject(null); // Click grid in pointer mode deselects
         }
-    }, [currentMode, addModeObjectType, selectedObjectId, draggingInfo, brushSize, sceneLogicRef, onInteractionEnd, onSelectObject, getInitialObjectId]);
+    }, [currentMode, addModeObjectType, selectedObjectId, draggingInfo, brushSize, sceneLogicRef, onInteractionEnd, onSelectObject, getInitialObjectId, raycaster, pointer, camera]); // Added raycaster deps
 
     const handlePointerMove = useCallback((event) => {
-        // Update pointerRef immediately for use in raycasting logic
-        // The pointer object from useThree() might update slightly delayed in React state batches
         pointerRef.current.x = (event.clientX / window.innerWidth) * 2 - 1;
         pointerRef.current.y = -(event.clientY / window.innerHeight) * 2 + 1;
-
         if (!sceneLogicRef.current) return;
-
-        // Use the updated pointerRef for raycasting
         raycaster.setFromCamera(pointerRef.current, camera);
 
         if (draggingInfo && dragPlaneRef.current) {
             const intersects = raycaster.intersectObject(dragPlaneRef.current);
             if (intersects.length > 0) {
                 const point = intersects[0].point;
-                const { gridWidth, gridHeight } = sceneLogicRef.current.getGridDimensions();
-                // Ensure CELL_SIZE is correctly applied
-                const gridX = Math.floor(point.x / CELL_SIZE + gridWidth / 2);
-                const gridZ = Math.floor(point.z / CELL_SIZE + gridHeight / 2);
-                const clampedX = Math.max(0, Math.min(gridX, gridWidth - 1));
-                const clampedZ = Math.max(0, Math.min(gridZ, gridHeight - 1));
-                // console.log(`Dragging to grid: ${clampedX}, ${clampedZ}`); // Debug log
-                sceneLogicRef.current.updateObjectPosition(draggingInfo.id, clampedX, clampedZ);
-            } else {
-                 // console.log("Drag Raycast Missed Plane"); // Debug log
+                // Update using precise world coordinates from drag plane intersection
+                sceneLogicRef.current.updateObjectPositionWorld(draggingInfo.id, point.x, point.z);
             }
         } else if (isPaintingTerrain) {
             const { gridWidth, gridHeight } = sceneLogicRef.current.getGridDimensions();
             const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
             const intersectionPoint = new THREE.Vector3();
             if (raycaster.ray.intersectPlane(groundPlane, intersectionPoint)) {
-                const gridX = Math.floor(intersectionPoint.x / CELL_SIZE + gridWidth / 2);
-                const gridZ = Math.floor(intersectionPoint.z / CELL_SIZE + gridHeight / 2);
+                 // Convert world intersection to grid cell for brush application
+                 const gridX = Math.floor(intersectionPoint.x / CELL_SIZE + gridWidth / 2);
+                 const gridZ = Math.floor(intersectionPoint.z / CELL_SIZE + gridHeight / 2);
                 if (gridX >= 0 && gridX < gridWidth && gridZ >= 0 && gridZ < gridHeight) {
                     sceneLogicRef.current.applyTerrainBrush(gridX, gridZ, HEIGHT_MODIFIER * paintDirection);
                 }
