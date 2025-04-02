@@ -333,9 +333,12 @@ function Experience({
     getInitialObjectId // Function to get next ID
 }) {
     // --- R3F Hooks & Refs ---
-    const { raycaster, pointer, camera } = useThree(); // Safe to use here
+    const { raycaster, pointer, camera, gl } = useThree(); // Get gl.domElement for listeners
     const orbitControlsRef = useRef();
     const dragPlaneRef = useRef();
+
+    // Refs to store latest pointer position for handlers outside react flow
+    const pointerRef = useRef({ x: 0, y: 0 });
 
     // --- Interaction State ---
     const [draggingInfo, setDraggingInfo] = useState(null);
@@ -343,34 +346,34 @@ function Experience({
     const [paintDirection, setPaintDirection] = useState(1);
 
     // --- Event Handlers ---
+    // --- Pointer Down Handlers (Initiate Interaction) ---
     const handleObjectPointerDown = useCallback((event, objectId, objectType) => {
-        event.stopPropagation(); // Prevent grid interaction when clicking object
+        event.stopPropagation();
         if (currentMode === 'edit-terrain' || currentMode === 'move') {
-            onSelectObject(objectId); // Select object
+            onSelectObject(objectId);
             const clickedObject = sceneLogicRef.current?.getObjectById(objectId);
             if (clickedObject) {
                 const groundHeight = sceneLogicRef.current?.getGroundHeight(clickedObject.gridX, clickedObject.gridZ) ?? 0;
-                // Set drag plane slightly above object's current base
                 setDraggingInfo({ id: objectId, initialY: getWorldYBase(groundHeight) + DRAG_PLANE_OFFSET });
                 if (orbitControlsRef.current) orbitControlsRef.current.enabled = false;
-                event.target?.setPointerCapture(event.pointerId);
+                event.target?.setPointerCapture(event.pointerId); // Capture pointer
+                console.log("Drag Start:", objectId, "at Y:", getWorldYBase(groundHeight) + DRAG_PLANE_OFFSET);
             }
         }
     }, [currentMode, onSelectObject, sceneLogicRef]);
 
     const handleGridPointerDown = useCallback((event, gridX, gridZ) => {
-        if (draggingInfo) return; // Ignore grid clicks while dragging
+        if (draggingInfo) return;
 
         if (addModeObjectType) {
              const baseProps = { id: getInitialObjectId(), type: addModeObjectType, gridX, gridZ };
-             const typeProps = { tree: { maxTrunkHeight: 0.8, maxFoliageHeight: 1.2, maxFoliageRadius: 0.5 }, shrub: { maxRadius: 0.4 }, grass: { maxHeight: 0.3, maxWidth: 0.4 }, }[addModeObjectType] || {};
+             const typeProps = { /* default type props */ }[addModeObjectType] || {};
              sceneLogicRef.current?.addObject({ ...baseProps, ...typeProps });
-             onSelectObject(null); // Deselect any previous object
-             onInteractionEnd(); // Reset mode
+             onSelectObject(null);
+             onInteractionEnd();
         } else if (selectedObjectId !== null && currentMode === 'move') {
-            // Allow clicking grid to move selected object *instantly* (alternative to drag)
             sceneLogicRef.current?.updateObjectPosition(selectedObjectId, gridX, gridZ);
-            onInteractionEnd(); // Optionally deselect after move
+            onInteractionEnd();
         } else if (currentMode === 'edit-terrain') {
             event.stopPropagation();
             setIsPaintingTerrain(true);
@@ -379,80 +382,101 @@ function Experience({
             sceneLogicRef.current?.applyTerrainBrush(gridX, gridZ, HEIGHT_MODIFIER * dir);
             event.target?.setPointerCapture(event.pointerId);
             if (orbitControlsRef.current) orbitControlsRef.current.enabled = false;
+            console.log("Paint Start");
         } else {
-            onSelectObject(null); // Click grid in pointer mode deselects
+            onSelectObject(null);
         }
     }, [currentMode, addModeObjectType, selectedObjectId, draggingInfo, brushSize, sceneLogicRef, onInteractionEnd, onSelectObject, getInitialObjectId]);
 
     const handlePointerMove = useCallback((event) => {
-        if (!sceneLogicRef.current) return; // Ensure scene logic is available
+        // Update pointerRef immediately for use in raycasting logic
+        // The pointer object from useThree() might update slightly delayed in React state batches
+        pointerRef.current.x = (event.clientX / window.innerWidth) * 2 - 1;
+        pointerRef.current.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+        if (!sceneLogicRef.current) return;
+
+        // Use the updated pointerRef for raycasting
+        raycaster.setFromCamera(pointerRef.current, camera);
 
         if (draggingInfo && dragPlaneRef.current) {
-            raycaster.setFromCamera(pointer, camera); // pointer is updated by r3f event system
             const intersects = raycaster.intersectObject(dragPlaneRef.current);
             if (intersects.length > 0) {
                 const point = intersects[0].point;
                 const { gridWidth, gridHeight } = sceneLogicRef.current.getGridDimensions();
+                // Ensure CELL_SIZE is correctly applied
                 const gridX = Math.floor(point.x / CELL_SIZE + gridWidth / 2);
                 const gridZ = Math.floor(point.z / CELL_SIZE + gridHeight / 2);
                 const clampedX = Math.max(0, Math.min(gridX, gridWidth - 1));
                 const clampedZ = Math.max(0, Math.min(gridZ, gridHeight - 1));
+                // console.log(`Dragging to grid: ${clampedX}, ${clampedZ}`); // Debug log
                 sceneLogicRef.current.updateObjectPosition(draggingInfo.id, clampedX, clampedZ);
+            } else {
+                 // console.log("Drag Raycast Missed Plane"); // Debug log
             }
         } else if (isPaintingTerrain) {
-            raycaster.setFromCamera(pointer, camera);
             const { gridWidth, gridHeight } = sceneLogicRef.current.getGridDimensions();
-            // Raycast against the visible ground plane for simplicity
-             const groundPlaneMesh = sceneLogicRef.current?.getBasePlaneMesh?.(); // Need a way to get this ref if exists
-             // Fallback: Raycast against mathematical plane
-             const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0); // Assuming base near Y=0
-             const intersectionPoint = new THREE.Vector3();
-             if (raycaster.ray.intersectPlane(groundPlane, intersectionPoint)) {
+            const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+            const intersectionPoint = new THREE.Vector3();
+            if (raycaster.ray.intersectPlane(groundPlane, intersectionPoint)) {
                 const gridX = Math.floor(intersectionPoint.x / CELL_SIZE + gridWidth / 2);
                 const gridZ = Math.floor(intersectionPoint.z / CELL_SIZE + gridHeight / 2);
                 if (gridX >= 0 && gridX < gridWidth && gridZ >= 0 && gridZ < gridHeight) {
                     sceneLogicRef.current.applyTerrainBrush(gridX, gridZ, HEIGHT_MODIFIER * paintDirection);
                 }
-             }
+            }
         }
-    }, [draggingInfo, isPaintingTerrain, paintDirection, raycaster, pointer, camera, sceneLogicRef]);
+    }, [draggingInfo, isPaintingTerrain, paintDirection, raycaster, camera, sceneLogicRef]); // Removed pointer dependency
 
-    const handlePointerUp = useCallback((event) => {
+     const handlePointerUp = useCallback((event) => {
+        console.log("Pointer Up Fired"); // Debug log
+        // No need to check event target for release capture when using window listeners
         if (draggingInfo) {
-             event.target?.releasePointerCapture?.(event.pointerId);
+            // gl.domElement.releasePointerCapture?.(event.pointerId); // Release might need event if not window listener
             setDraggingInfo(null);
             if (orbitControlsRef.current) orbitControlsRef.current.enabled = true;
-             // Keep object selected after drag? Or deselect via onInteractionEnd? Let's keep selected for now.
-            // onInteractionEnd();
+            console.log("Drag End");
         }
         if (isPaintingTerrain) {
-             event.target?.releasePointerCapture?.(event.pointerId);
+            // gl.domElement.releasePointerCapture?.(event.pointerId);
             setIsPaintingTerrain(false);
             if (orbitControlsRef.current) orbitControlsRef.current.enabled = true;
+             console.log("Paint End");
         }
-    }, [draggingInfo, isPaintingTerrain]); // Removed event dependency
+    }, [draggingInfo, isPaintingTerrain /*, gl*/]); // Removed event dependency
 
-    const handlePointerMissed = useCallback(() => {
-        // Clicked background
+    useEffect(() => {
+        const domElement = gl.domElement; // Use the canvas element for listeners
+
+        // Wrapper functions to ensure correct event handling context if needed
+        const moveHandler = (event) => handlePointerMove(event);
+        const upHandler = (event) => handlePointerUp(event);
+
+        if (draggingInfo || isPaintingTerrain) {
+            console.log("Attaching global listeners");
+            domElement.addEventListener('pointermove', moveHandler);
+            domElement.addEventListener('pointerup', upHandler);
+            // Optional: Add pointerleave listener if needed
+            // domElement.addEventListener('pointerleave', upHandler);
+        }
+
+        // Cleanup function
+        return () => {
+             console.log("Removing global listeners");
+            domElement.removeEventListener('pointermove', moveHandler);
+            domElement.removeEventListener('pointerup', upHandler);
+            // domElement.removeEventListener('pointerleave', upHandler);
+
+             // Ensure controls are re-enabled if component unmounts during drag/paint
+             if (orbitControlsRef.current) orbitControlsRef.current.enabled = true;
+        };
+    }, [draggingInfo, isPaintingTerrain, handlePointerMove, handlePointerUp, gl]); // Add gl dependency
+
+     const handlePointerMissed = useCallback(() => {
         if (!addModeObjectType && !draggingInfo && !isPaintingTerrain) {
-            onSelectObject(null); // Deselect
+            onSelectObject(null);
         }
     }, [addModeObjectType, draggingInfo, isPaintingTerrain, onSelectObject]);
-
-    // Need to attach move/up listeners globally if default canvas handlers don't work well
-    // useEffect(() => {
-    //     const handleMove = (event) => handlePointerMove(event); // Need to adapt event structure if using window
-    //     const handleUp = (event) => handlePointerUp(event);
-    //     if (draggingInfo || isPaintingTerrain) {
-    //         window.addEventListener('pointermove', handleMove);
-    //         window.addEventListener('pointerup', handleUp);
-    //     }
-    //     return () => {
-    //         window.removeEventListener('pointermove', handleMove);
-    //         window.removeEventListener('pointerup', handleUp);
-    //     };
-    // }, [draggingInfo, isPaintingTerrain, handlePointerMove, handlePointerUp]);
-
 
     return (
         <>
@@ -473,16 +497,13 @@ function Experience({
 
             {/* Invisible plane for drag raycasting */}
             {draggingInfo && (
-                <Plane
-                    ref={dragPlaneRef}
-                    args={[1000, 1000]} // Large enough
-                    rotation={[-Math.PI / 2, 0, 0]}
-                    position={[0, draggingInfo.initialY, 0]} // At object start drag height
-                    visible={false}
+                <Plane ref={dragPlaneRef} args={[1000, 1000]} rotation={[-Math.PI / 2, 0, 0]} position={[0, draggingInfo.initialY, 0]}
+                    // visible={true} // DEBUG: Make plane visible
+                    // material-color="red" // DEBUG: Make plane visible
+                     visible={false}
                  />
             )}
-
-            {/* OrbitControls managed here */}
+            {/* Conditionally enable/disable controls here based on state */}
             <OrbitControls ref={orbitControlsRef} enabled={!draggingInfo && !isPaintingTerrain} makeDefault/>
 
             {/* Global listeners if needed, placed on a mesh covering the screen or use useEffect above */}
