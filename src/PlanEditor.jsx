@@ -1,6 +1,6 @@
 // src/PlanEditor.jsx
 import React, { useState, useMemo, useCallback, useRef, forwardRef, useImperativeHandle, useEffect } from 'react';
-import { Canvas, useThree, useFrame } from '@react-three/fiber'; // useFrame might be needed by Objects.jsx via ObjectBase
+import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera, Box, Plane } from '@react-three/drei';
 import * as THREE from 'three';
 
@@ -17,6 +17,7 @@ const MIN_GRID_DIM = 5;
 const MAX_GRID_DIM = 100;
 const COLORS = ['#8BC34A', '#CDDC39', '#FFEB3B', '#FFC107', '#FF9800', '#795548']; // Terrain Colors
 const DRAG_PLANE_OFFSET = 0.1; // Place drag plane slightly above ground
+const DRAG_THRESHOLD = 5; // Minimum pixels pointer must move to initiate a drag
 
 // --- Helper Functions ---
 const getInitialHeight = (x, z, width, height) => {
@@ -31,16 +32,17 @@ const gridToWorldCenter = (gridX, gridZ, currentHeight, gridWidth, gridHeight) =
     const worldY = currentHeight / 2; // Center Y for grid cell box
     return [worldX, worldY, worldZ];
 };
+
 // Calculate base Y position for an object placed *on* the ground
 const getWorldYBase = (groundHeight) => groundHeight;
-const lerp = THREE.MathUtils.lerp; // Shortcut
+const lerp = THREE.MathUtils.lerp;
 
 // --- Object ID Counter ---
-let nextObjectId = 1; // Simple counter for unique IDs
+let nextObjectId = 1;
 
 // --- Components ---
 
-// GridCell remains here as it's part of the terrain base
+// GridCell remains here
 const GridCell = React.memo(({ x, z, height, color, onPointerDown, gridWidth, gridHeight }) => {
     // Calculate world position for the center of the grid cell box
     const position = useMemo(() => {
@@ -71,6 +73,7 @@ const GridCell = React.memo(({ x, z, height, color, onPointerDown, gridWidth, gr
         </mesh>
     );
 });
+
 
 
 // --- Scene Component (Manages Data State and 3D Primitives) ---
@@ -108,8 +111,6 @@ const SceneWithLogic = forwardRef(({
      });
     const gridHeight = useMemo(() => heightData.length, [heightData]);
     const gridWidth = useMemo(() => (heightData[0] ? heightData[0].length : 0), [heightData]);
-
-    // Initial data helpers
     function getInitialHeightData(width, height) {
         const data = []; for (let z = 0; z < height; z++) { data[z] = []; for (let x = 0; x < width; x++) { data[z][x] = getInitialHeight(x, z, width, height); } } return data;
     }
@@ -236,15 +237,11 @@ const SceneWithLogic = forwardRef(({
     const renderedObjects = useMemo(() => {
          if (gridWidth === 0 || gridHeight === 0) return [];
          return objects.map(obj => {
-            const ObjectComponent = ObjectComponents[obj.type]; // Use imported map
-            if (!ObjectComponent) { console.warn(`Unknown object type: ${obj.type}`); return null; }
-            const groundHeight = getGroundHeightAtWorld(obj.worldX, obj.worldZ);
-            const worldYBase = getWorldYBase(groundHeight);
-            const position = [obj.worldX, worldYBase, obj.worldZ];
+            const ObjectComponent = ObjectComponents[obj.type]; if (!ObjectComponent) return null;
+            const groundHeight = getGroundHeightAtWorld(obj.worldX, obj.worldZ); const worldYBase = getWorldYBase(groundHeight); const position = [obj.worldX, worldYBase, obj.worldZ];
             return ( <ObjectComponent key={obj.id} objectId={obj.id} position={position} isSelected={obj.id === selectedObjectId} onSelect={() => onObjectSelect(obj.id)} onPointerDown={onObjectPointerDown} globalAge={globalAge} {...obj} /> );
         })
-    }, [objects, selectedObjectId, globalAge, onObjectSelect, onObjectPointerDown, getGroundHeightAtWorld]); // Removed gridWidth/Height
-
+    }, [objects, selectedObjectId, globalAge, onObjectSelect, onObjectPointerDown, getGroundHeightAtWorld]);
 
      // --- Base Scene Elements ---
     const groundPlaneSize = useMemo(() => [gridWidth * CELL_SIZE + 4, gridHeight * CELL_SIZE + 4], [gridWidth, gridHeight]);
@@ -256,93 +253,156 @@ const SceneWithLogic = forwardRef(({
             <directionalLight position={[gridWidth * 0.5, 15 + avgHeight, gridHeight * 0.5]} intensity={1.0} castShadow shadow-mapSize-width={1024} shadow-mapSize-height={1024} />
             <group>{gridCells}</group>
             <group>{renderedObjects}</group>
-            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.05, 0]} receiveShadow name="base-ground">
-                <planeGeometry args={groundPlaneSize} />
-                <meshStandardMaterial color="#444" side={THREE.DoubleSide} />
-            </mesh>
+            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.05, 0]} receiveShadow name="base-ground"> <planeGeometry args={groundPlaneSize} /> <meshStandardMaterial color="#444" side={THREE.DoubleSide} /> </mesh>
         </>
     );
 });
 
 
-// --- Experience Component (Handles R3F Context and Interactions) ---
+// --- Experience Component (Handles R3F Context and Interactions based on Mode) ---
 function Experience({
-    currentMode, addModeObjectType, selectedObjectId, globalAge, brushSize,
-    sceneLogicRef, onSelectObject, onInteractionEnd, getInitialObjectId
+    currentMode, // Explicit mode from PlanEditor
+    addModeObjectType, // Only used when currentMode is 'add-*'
+    selectedObjectId, // Read-only, selection managed by PlanEditor via onSelectObject
+    globalAge, brushSize, // Props for rendering/API
+    sceneLogicRef, onSelectObject, onInteractionEnd, getInitialObjectId // Refs/Callbacks
 }) {
     const { raycaster, pointer, camera, gl } = useThree();
     const orbitControlsRef = useRef();
     const dragPlaneRef = useRef();
+
+    // --- Interaction State ---
+    const [potentialDragInfo, setPotentialDragInfo] = useState(null);
     const [draggingInfo, setDraggingInfo] = useState(null);
     const [isPaintingTerrain, setIsPaintingTerrain] = useState(false);
     const [paintDirection, setPaintDirection] = useState(1);
     const pointerRef = useRef({ x: 0, y: 0 });
 
-    // --- Event Handlers ---
+    // --- Event Handlers (Now strictly check currentMode) ---
+
     const handleObjectPointerDown = useCallback((event, objectId, objectType) => {
+        // Only handle if in 'select' mode
+        if (currentMode !== 'select') return;
+
         event.stopPropagation();
-        if (currentMode === 'edit-terrain' || currentMode === 'move') {
-            onSelectObject(objectId);
-            const clickedObject = sceneLogicRef.current?.getObjectProperties(objectId);
-            if (clickedObject) {
-                const groundHeight = sceneLogicRef.current?.getGroundHeightAtWorld(clickedObject.worldX, clickedObject.worldZ) ?? 0;
-                setDraggingInfo({ id: objectId, initialY: getWorldYBase(groundHeight) + DRAG_PLANE_OFFSET });
-                if (orbitControlsRef.current) orbitControlsRef.current.enabled = false;
-                event.target?.setPointerCapture(event.pointerId);
-            }
+        onSelectObject(objectId); // Select the object
+        const clickedObject = sceneLogicRef.current?.getObjectProperties(objectId);
+        if (clickedObject) {
+            const groundHeight = sceneLogicRef.current?.getGroundHeightAtWorld(clickedObject.worldX, clickedObject.worldZ) ?? 0;
+            // Set potential drag info
+            setPotentialDragInfo({
+                id: objectId, initialY: getWorldYBase(groundHeight) + DRAG_PLANE_OFFSET,
+                startX: event.clientX, startY: event.clientY, pointerId: event.pointerId
+            });
+            event.target?.setPointerCapture(event.pointerId);
+            console.log("Potential Drag Start:", objectId);
         }
-    }, [currentMode, onSelectObject, sceneLogicRef]);
+    }, [currentMode, onSelectObject, sceneLogicRef]); // Add currentMode dependency
 
     const handleGridPointerDown = useCallback((event, gridX, gridZ) => {
-        if (draggingInfo || !sceneLogicRef.current) return;
-        raycaster.setFromCamera(pointer, camera);
-        const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-        const intersectionPoint = new THREE.Vector3();
-        if (!raycaster.ray.intersectPlane(groundPlane, intersectionPoint)) return;
-        const worldX = intersectionPoint.x; const worldZ = intersectionPoint.z;
+        // Cancel potential drag if grid is clicked
+        if (potentialDragInfo) {
+             gl.domElement.releasePointerCapture?.(potentialDragInfo.pointerId);
+             setPotentialDragInfo(null);
+        }
+        if (draggingInfo || !sceneLogicRef.current) return; // Ignore grid clicks while dragging
 
-        if (addModeObjectType) {
-             const baseProps = { id: getInitialObjectId(), type: addModeObjectType, worldX, worldZ };
-             sceneLogicRef.current.addObject(baseProps); // AddObject handles defaults
-             onSelectObject(null); onInteractionEnd();
-        } else if (selectedObjectId !== null && currentMode === 'move') {
-            sceneLogicRef.current.updateObjectPositionWorld(selectedObjectId, worldX, worldZ);
-            onInteractionEnd();
-        } else if (currentMode === 'edit-terrain') {
-            event.stopPropagation(); setIsPaintingTerrain(true); const dir = event.shiftKey ? -1 : 1; setPaintDirection(dir);
+        // --- Mode-Specific Actions ---
+        if (currentMode.startsWith('add-')) { // Check if mode is 'add-tree', 'add-shrub', etc.
+             raycaster.setFromCamera(pointer, camera);
+             const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+             const intersectionPoint = new THREE.Vector3();
+             if (!raycaster.ray.intersectPlane(groundPlane, intersectionPoint)) return;
+             const worldX = intersectionPoint.x; const worldZ = intersectionPoint.z;
+
+             const typeToAdd = currentMode.split('-')[1]; // Extract 'tree', 'shrub', etc.
+             const baseProps = { id: getInitialObjectId(), type: typeToAdd, worldX, worldZ };
+             sceneLogicRef.current.addObject(baseProps);
+             // onSelectObject(null); // Deselect handled by onInteractionEnd
+             onInteractionEnd(); // Switch back to 'select' mode after adding
+        }
+        else if (currentMode === 'terrain') {
+            event.stopPropagation();
+            setIsPaintingTerrain(true);
+            const dir = event.shiftKey ? -1 : 1;
+            setPaintDirection(dir);
             sceneLogicRef.current.applyTerrainBrush(gridX, gridZ, HEIGHT_MODIFIER * dir); // Use grid coords for brush center
-            event.target?.setPointerCapture(event.pointerId); if (orbitControlsRef.current) orbitControlsRef.current.enabled = false;
-        } else { onSelectObject(null); }
-    }, [currentMode, addModeObjectType, selectedObjectId, draggingInfo, brushSize, sceneLogicRef, onInteractionEnd, onSelectObject, getInitialObjectId, raycaster, pointer, camera]);
+            event.target?.setPointerCapture(event.pointerId);
+            if (orbitControlsRef.current) orbitControlsRef.current.enabled = false;
+            console.log("Paint Start");
+        }
+        else if (currentMode === 'select') {
+             // Click on grid in select mode deselects any selected object
+             onSelectObject(null);
+        }
+
+    }, [currentMode, potentialDragInfo, draggingInfo, brushSize, sceneLogicRef, onInteractionEnd, onSelectObject, getInitialObjectId, raycaster, pointer, camera, gl]); // Added currentMode, potentialDragInfo
 
     const handlePointerMove = useCallback((event) => {
-        pointerRef.current.x = (event.clientX / window.innerWidth) * 2 - 1; pointerRef.current.y = -(event.clientY / window.innerHeight) * 2 + 1;
-        if (!sceneLogicRef.current) return; raycaster.setFromCamera(pointerRef.current, camera);
+        pointerRef.current.x = (event.clientX / window.innerWidth) * 2 - 1;
+        pointerRef.current.y = -(event.clientY / window.innerHeight) * 2 + 1;
+        if (!sceneLogicRef.current) return;
 
-        if (draggingInfo && dragPlaneRef.current) {
+        // Check if we should transition from potential drag to actual drag (only in select mode)
+        if (currentMode === 'select' && potentialDragInfo) {
+            const dx = event.clientX - potentialDragInfo.startX; const dy = event.clientY - potentialDragInfo.startY;
+            if ((dx * dx + dy * dy) > DRAG_THRESHOLD * DRAG_THRESHOLD) {
+                console.log("Threshold exceeded, starting actual drag");
+                setDraggingInfo({ id: potentialDragInfo.id, initialY: potentialDragInfo.initialY });
+                setPotentialDragInfo(null);
+                if (orbitControlsRef.current) orbitControlsRef.current.enabled = false;
+            } else {
+                return; // Not dragging yet
+            }
+        }
+
+        // --- Handle actual drag or paint based on state ---
+        raycaster.setFromCamera(pointerRef.current, camera);
+
+        if (draggingInfo && dragPlaneRef.current) { // Actual drag is happening
             const intersects = raycaster.intersectObject(dragPlaneRef.current);
             if (intersects.length > 0) { const point = intersects[0].point; sceneLogicRef.current.updateObjectPositionWorld(draggingInfo.id, point.x, point.z); }
-        } else if (isPaintingTerrain) {
-            const { gridWidth, gridHeight } = sceneLogicRef.current.getGridDimensions(); const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0); const intersectionPoint = new THREE.Vector3();
+        } else if (isPaintingTerrain) { // Painting is happening (implicitly, currentMode must be 'terrain')
+            const { gridWidth, gridHeight } = sceneLogicRef.current.getGridDimensions();
+            const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0); const intersectionPoint = new THREE.Vector3();
             if (raycaster.ray.intersectPlane(groundPlane, intersectionPoint)) {
                  const gridX = Math.floor(intersectionPoint.x / CELL_SIZE + gridWidth / 2); const gridZ = Math.floor(intersectionPoint.z / CELL_SIZE + gridHeight / 2);
                  if (gridX >= 0 && gridX < gridWidth && gridZ >= 0 && gridZ < gridHeight) { sceneLogicRef.current.applyTerrainBrush(gridX, gridZ, HEIGHT_MODIFIER * paintDirection); }
             }
         }
-    }, [draggingInfo, isPaintingTerrain, paintDirection, raycaster, camera, sceneLogicRef]);
+    }, [currentMode, potentialDragInfo, draggingInfo, isPaintingTerrain, paintDirection, raycaster, camera, sceneLogicRef]); // Added currentMode
 
     const handlePointerUp = useCallback((event) => {
-        // No need to check event target if using listeners on gl.domElement
-        if (draggingInfo) { setDraggingInfo(null); if (orbitControlsRef.current) orbitControlsRef.current.enabled = true; }
-        if (isPaintingTerrain) { setIsPaintingTerrain(false); if (orbitControlsRef.current) orbitControlsRef.current.enabled = true; }
-    }, [draggingInfo, isPaintingTerrain]);
+        const pointerId = event.pointerId;
 
-     // Effect to add/remove global listeners on the canvas element
+        if (draggingInfo) { // A drag actually occurred
+            console.log("Pointer Up - Drag End");
+            setDraggingInfo(null);
+            // Keep object selected after drag - DO NOT call onInteractionEnd here
+            if (orbitControlsRef.current) orbitControlsRef.current.enabled = true;
+            gl.domElement.releasePointerCapture?.(pointerId);
+        } else if (potentialDragInfo) { // Only a click occurred on an object
+             console.log("Pointer Up - Click End (No Drag)");
+             if(potentialDragInfo.pointerId === pointerId) {
+                setPotentialDragInfo(null);
+                // Selection persists
+                gl.domElement.releasePointerCapture?.(pointerId);
+             }
+        } else if (isPaintingTerrain) { // Painting ended
+            console.log("Pointer Up - Paint End");
+            setIsPaintingTerrain(false);
+            if (orbitControlsRef.current) orbitControlsRef.current.enabled = true;
+            gl.domElement.releasePointerCapture?.(pointerId);
+        }
+    }, [draggingInfo, potentialDragInfo, isPaintingTerrain, gl /* removed onInteractionEnd */]); // Removed onInteractionEnd
+
+     // Effect to add/remove global listeners
      useEffect(() => {
         const domElement = gl.domElement;
         const moveHandler = (event) => handlePointerMove(event);
         const upHandler = (event) => handlePointerUp(event);
-        if (draggingInfo || isPaintingTerrain) {
+        // Listen if potentially dragging, actually dragging, or painting
+        if (potentialDragInfo || draggingInfo || isPaintingTerrain) {
             domElement.addEventListener('pointermove', moveHandler);
             domElement.addEventListener('pointerup', upHandler);
             domElement.addEventListener('pointerleave', upHandler); // End interaction if pointer leaves canvas
@@ -351,13 +411,11 @@ function Experience({
             domElement.removeEventListener('pointermove', moveHandler);
             domElement.removeEventListener('pointerup', upHandler);
             domElement.removeEventListener('pointerleave', upHandler);
-            // Ensure controls re-enabled on cleanup
-            if (orbitControlsRef.current) orbitControlsRef.current.enabled = true;
+            if (orbitControlsRef.current) orbitControlsRef.current.enabled = true; // Ensure re-enabled
         };
-    }, [draggingInfo, isPaintingTerrain, handlePointerMove, handlePointerUp, gl]);
+    }, [potentialDragInfo, draggingInfo, isPaintingTerrain, handlePointerMove, handlePointerUp, gl]);
 
-    // Deselection logic can be handled via onPointerMissed on Canvas in PlanEditor
-    // Or add a full screen plane here with low render order and onPointerDown={handleBackgroundClick}
+    // handlePointerMissed is now handled by the Canvas prop in PlanEditor
 
     return (
         <>
@@ -365,9 +423,10 @@ function Experience({
             <SceneWithLogic
                 ref={sceneLogicRef} selectedObjectId={selectedObjectId} globalAge={globalAge} brushSize={brushSize}
                 onObjectSelect={onSelectObject} onObjectPointerDown={handleObjectPointerDown} onGridPointerDown={handleGridPointerDown}
-                onInteractionEnd={onInteractionEnd}
+                onInteractionEnd={onInteractionEnd} // Pass down for Add/Resize
             />
             {draggingInfo && (<Plane ref={dragPlaneRef} args={[10000, 10000]} rotation={[-Math.PI / 2, 0, 0]} position={[0, draggingInfo.initialY, 0]} visible={false} />)}
+            {/* Disable controls only when actually dragging or painting */}
             <OrbitControls ref={orbitControlsRef} enabled={!draggingInfo && !isPaintingTerrain} makeDefault/>
         </>
     );
@@ -378,7 +437,9 @@ function Experience({
 export default function PlanEditor() {
     const sceneLogicRef = useRef();
     const fileInputRef = useRef(null);
-    const [addModeObjectType, setAddModeObjectType] = useState(null);
+
+    // --- UI State and App Modes ---
+    const [currentMode, setCurrentMode] = useState('select'); // Default mode: 'select', 'terrain', 'add-tree', etc.
     const [selectedObjectId, setSelectedObjectId] = useState(null);
     const [selectedObjectProps, setSelectedObjectProps] = useState(null);
     const [globalAge, setGlobalAge] = useState(1.0);
@@ -387,7 +448,9 @@ export default function PlanEditor() {
     const [desiredHeight, setDesiredHeight] = useState(INITIAL_GRID_HEIGHT);
     const [currentGridSize, setCurrentGridSize] = useState({w: INITIAL_GRID_WIDTH, h: INITIAL_GRID_HEIGHT});
 
-    const currentMode = useMemo(() => { if (addModeObjectType) return `add-${addModeObjectType}`; if (selectedObjectId !== null) return 'move'; return 'edit-terrain'; }, [addModeObjectType, selectedObjectId]);
+    // Derive addModeObjectType from currentMode for passing down (though Experience checks currentMode directly now)
+    const addModeObjectType = useMemo(() => currentMode.startsWith('add-') ? currentMode.split('-')[1] : null, [currentMode]);
+
     const getNextObjectId = useCallback(() => nextObjectId++, []);
     const getButtonStyle = (modeOrAction, disabled = false) => ({ margin: '2px', padding: '4px 8px', border: currentMode === modeOrAction ? '2px solid #eee' : '2px solid transparent', backgroundColor: disabled ? '#666' : (currentMode === modeOrAction ? '#555' : '#333'), color: disabled ? '#aaa' : 'white', cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.6 : 1 });
 
@@ -411,22 +474,58 @@ export default function PlanEditor() {
             finally { if (fileInputRef.current) fileInputRef.current.value = ""; }
         }; reader.onerror = (e) => { console.error("Read Error:", e); alert("Error reading file."); if (fileInputRef.current) fileInputRef.current.value = ""; }; reader.readAsText(file);
     }, []);
-    const handleSetMode = (type) => { setAddModeObjectType(type); setSelectedObjectId(null); };
-    const handleSelectObject = useCallback((id) => { setSelectedObjectId(id); setAddModeObjectType(null); }, []);
+
+    // Handler to change the main mode
+    const handleSetMode = (newMode) => {
+        console.log("Setting mode to:", newMode);
+        setCurrentMode(newMode);
+        // Deselect object when changing away from 'select' mode or into an 'add' mode
+        if (newMode !== 'select' || newMode.startsWith('add-')) {
+             setSelectedObjectId(null);
+        }
+    };
+
+    // Callback from Experience when an object is selected
+    const handleSelectObject = useCallback((id) => {
+        // Can only select objects if in 'select' mode
+        if (currentMode === 'select') {
+            setSelectedObjectId(id);
+        } else if (id === null) {
+            // Allow deselecting via background click even in other modes? Maybe not.
+             setSelectedObjectId(null);
+        }
+    }, [currentMode]); // Depend on currentMode
+
     const handleRemoveSelected = () => { if (selectedObjectId !== null) { sceneLogicRef.current?.removeObject(selectedObjectId); setSelectedObjectId(null); } };
-    const handleInteractionEnd = useCallback(() => { setAddModeObjectType(null); setSelectedObjectId(null); }, []); // Deselect object on interaction end (e.g., after add, instant move, resize)
+
+    // Callback from Experience/SceneLogic when an interaction ends that should reset the mode (e.g., Add Object, Resize)
+    const handleInteractionEnd = useCallback(() => {
+        console.log("handleInteractionEnd called in PlanEditor - Resetting mode to select");
+        setCurrentMode('select'); // Go back to select mode after adding or resizing
+        setSelectedObjectId(null); // Ensure deselected
+    }, []);
+
     const handleResize = () => {
         const w = parseInt(desiredWidth, 10); const h = parseInt(desiredHeight, 10);
-        if (isNaN(w) || isNaN(h) || w < MIN_GRID_DIM || h < MIN_GRID_DIM || w > MAX_GRID_DIM || h > MAX_GRID_DIM) { alert(`Invalid size. Dimensions: ${MIN_GRID_DIM}-${MAX_GRID_DIM}.`); setDesiredWidth(currentGridSize.w); setDesiredHeight(currentGridSize.h); return; }
-        sceneLogicRef.current?.resizeGrid(w, h); setCurrentGridSize({ w: w, h: h });
-        // Interaction end callback handles deselect
+        if (isNaN(w) || isNaN(h) || w < MIN_GRID_DIM || h < MIN_GRID_DIM || w > MAX_GRID_DIM || h > MAX_GRID_DIM) { /* alert */ return; }
+        sceneLogicRef.current?.resizeGrid(w, h); // resizeGrid calls onInteractionEnd
+        setCurrentGridSize({ w: w, h: h });
     };
+
     const handlePropertyChange = (propName, value) => {
         if (selectedObjectId === null || !selectedObjectProps) return; let parsedValue = value; const schema = ObjectEditorSchemas[selectedObjectProps.type]; const propInfo = schema?.find(p => p.name === propName);
         if (propInfo?.type === 'number') { parsedValue = parseFloat(value); if (isNaN(parsedValue)) parsedValue = propInfo.min ?? 0; parsedValue = Math.max(propInfo.min ?? -Infinity, Math.min(propInfo.max ?? Infinity, parsedValue)); } // Clamp number values
         sceneLogicRef.current?.updateObjectProperty(selectedObjectId, propName, parsedValue); setSelectedObjectProps(prevProps => ({ ...prevProps, [propName]: parsedValue }));
     };
-    const instructions = useMemo(() => { switch(currentMode) { case 'add-tree': case 'add-shrub': case 'add-grass': return `Click terrain to add ${addModeObjectType}.`; case 'move': return "Drag object. Click terrain for instant move. Click bg/obj to select."; default: return "Brush: Click/Drag grid (Shift=Lower). Drag object. Click obj/bg to select."; } }, [currentMode, addModeObjectType]);
+
+    const instructions = useMemo(() => {
+         switch(currentMode) {
+            case 'select': return "Click object to select/edit properties. Drag selected object to move.";
+            case 'terrain': return "Click/Drag grid to modify height (Shift=Lower).";
+            case 'add-tree': case 'add-shrub': case 'add-grass': return `Click terrain to add ${addModeObjectType}.`;
+            default: return "Select a mode.";
+        }
+    }, [currentMode, addModeObjectType]);
 
     const renderPropertyEditors = () => {
         if (!selectedObjectProps) return null; const editorSchema = ObjectEditorSchemas[selectedObjectProps.type];
@@ -445,22 +544,43 @@ export default function PlanEditor() {
         );
     };
 
+    // Handler for Canvas pointer missed - only deselect if in 'select' mode
+    const handleCanvasPointerMissed = useCallback(() => {
+        if (currentMode === 'select') {
+            setSelectedObjectId(null);
+        }
+    }, [currentMode]);
+
     return (
         <div style={{ height: '100vh', width: '100vw', display: 'flex', flexDirection: 'column', background: '#282c34' }}>
+             {/* UI Overlay - Update Mode Buttons */}
              <div style={{ position: 'absolute', top: '10px', left: '10px', zIndex: 1, color: 'white', background: 'rgba(0,0,0,0.8)', padding: '10px', borderRadius: '5px', fontSize: '12px', width: '220px', maxHeight: 'calc(100vh - 20px)', overflowY: 'auto', boxSizing: 'border-box' }}>
-                 <div style={{ marginBottom: '8px' }}> <strong>Mode:</strong><br/> <button style={getButtonStyle('edit-terrain')} onClick={() => handleSetMode(null)}>Ptr/Brush</button> <button style={getButtonStyle('add-tree')} onClick={() => handleSetMode('tree')}>Add Tree</button> <button style={getButtonStyle('add-shrub')} onClick={() => handleSetMode('shrub')}>Add Shrub</button> <button style={getButtonStyle('add-grass')} onClick={() => handleSetMode('grass')}>Add Grass</button> </div>
-                 <div style={{ marginBottom: '8px', borderTop: '1px solid #555', paddingTop: '8px' }}> <strong>Actions:</strong><br/> <button onClick={onLoadClick} style={getButtonStyle('load')}>Load</button> <button onClick={onSaveClick} style={getButtonStyle('save')}>Save</button> <button onClick={handleRemoveSelected} disabled={selectedObjectId === null} style={getButtonStyle('remove', selectedObjectId === null)}>Remove</button> </div>
-                 <div style={{ marginBottom: '8px', borderTop: '1px solid #555', paddingTop: '8px' }}> <strong>Grid ({currentGridSize.w}x{currentGridSize.h}):</strong><br/> <input type="number" value={desiredWidth} onChange={(e) => setDesiredWidth(e.target.value)} min={MIN_GRID_DIM} max={MAX_GRID_DIM} style={{ width: '40px', marginRight: '3px' }}/> x <input type="number" value={desiredHeight} onChange={(e) => setDesiredHeight(e.target.value)} min={MIN_GRID_DIM} max={MAX_GRID_DIM} style={{ width: '40px', marginLeft: '3px', marginRight: '5px' }}/> <button onClick={handleResize} style={getButtonStyle('resize')}>Resize</button> </div>
-                 <div style={{ marginBottom: '8px', borderTop: '1px solid #555', paddingTop: '8px' }}> <strong>Brush Size:</strong> {brushSize}<br/> <input type="range" min="1" max="10" step="1" value={brushSize} onChange={(e) => setBrushSize(parseInt(e.target.value, 10))} style={{ width: '100%' }}/> </div>
-                 <div style={{ marginBottom: '8px', borderTop: '1px solid #555', paddingTop: '8px' }}> <strong>Global Age:</strong> {globalAge.toFixed(2)}<br/> <input type="range" min="0" max="1" step="0.01" value={globalAge} onChange={(e) => setGlobalAge(parseFloat(e.target.value))} style={{ width: '100%' }} /> </div>
-                 {renderPropertyEditors()}
-                 <div style={{ borderTop: '1px solid #555', paddingTop: '8px', marginTop: '8px' }}> <strong>How To:</strong><br/> {instructions} </div>
+                 <div style={{ marginBottom: '8px' }}>
+                     <strong>Mode:</strong><br/>
+                     {/* Explicit Mode Buttons */}
+                     <button style={getButtonStyle('select')} onClick={() => handleSetMode('select')}>Select/Move</button>
+                     <button style={getButtonStyle('terrain')} onClick={() => handleSetMode('terrain')}>Edit Terrain</button>
+                     <button style={getButtonStyle('add-tree')} onClick={() => handleSetMode('add-tree')}>Add Tree</button>
+                     <button style={getButtonStyle('add-shrub')} onClick={() => handleSetMode('add-shrub')}>Add Shrub</button>
+                     <button style={getButtonStyle('add-grass')} onClick={() => handleSetMode('add-grass')}>Add Grass</button>
+                 </div>
+                 {/* ... Actions, Grid Resize, Brush Size (only relevant in terrain mode?), Aging Slider ... */}
+                 <div style={{ marginBottom: '8px', borderTop: '1px solid #555', paddingTop: '8px', display: currentMode === 'terrain' ? 'block' : 'none' }}>
+                    <strong>Brush Size:</strong> {brushSize}<br/> <input type="range" min="1" max="10" step="1" value={brushSize} onChange={(e) => setBrushSize(parseInt(e.target.value, 10))} style={{ width: '100%' }}/>
+                 </div>
+                 {/* ... Property Editor (shown only if selectedObjectId is not null) ... */}
+                 {selectedObjectId !== null && renderPropertyEditors()}
+                 {/* ... Instructions ... */}
             </div>
+
             <input type="file" ref={fileInputRef} onChange={onFileSelected} accept=".json,application/json" style={{ display: 'none' }} />
+
              <div style={{ flexGrow: 1, overflow: 'hidden' }}>
-                <Canvas shadows onPointerMissed={() => { if (!addModeObjectType && selectedObjectId !== null) { handleSelectObject(null); } }}>
+                <Canvas shadows onPointerMissed={handleCanvasPointerMissed}>
                     <Experience
-                         currentMode={currentMode} addModeObjectType={addModeObjectType} selectedObjectId={selectedObjectId}
+                         currentMode={currentMode} // Pass down the explicit mode
+                         addModeObjectType={addModeObjectType} // Still needed for add logic? Maybe not if checking currentMode
+                         selectedObjectId={selectedObjectId} // Pass down selection
                          globalAge={globalAge} brushSize={brushSize} sceneLogicRef={sceneLogicRef}
                          onSelectObject={handleSelectObject} onInteractionEnd={handleInteractionEnd} getInitialObjectId={getNextObjectId}
                     />
