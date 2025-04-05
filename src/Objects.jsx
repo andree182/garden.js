@@ -81,11 +81,11 @@ export const Tree = React.memo(({ position, isSelected, onSelect, onPointerDown,
 });
 
 Tree.editorSchema = [
-    { name: 'maxTrunkHeight', label: 'Trunk H', type: 'number', step: 0.1, min: 0.1, max: 5 },
-    { name: 'maxFoliageHeight', label: 'Foliage H', type: 'number', step: 0.1, min: 0.1, max: 5 },
-    { name: 'maxFoliageRadius', label: 'Foliage R', type: 'number', step: 0.1, min: 0.1, max: 3 },
-    { name: 'trunkColor', label: 'Trunk Clr', type: 'color' },
-    { name: 'foliageColor', label: 'Foliage Clr', type: 'color' },
+    { name: 'maxTrunkHeight', label: 'Trunk H', type: 'number', step: 0.1, min: 0.1, max: 5, defaultValue: 0.8 },
+    { name: 'maxFoliageHeight', label: 'Foliage H', type: 'number', step: 0.1, min: 0.1, max: 5, defaultValue: 1.2 },
+    { name: 'maxFoliageRadius', label: 'Foliage R', type: 'number', step: 0.1, min: 0.1, max: 3, defaultValue: 0.5 },
+    { name: 'trunkColor', label: 'Trunk Clr', type: 'color', defaultValue: "#8B4513" },
+    { name: 'foliageColor', label: 'Foliage Clr', type: 'color', defaultValue: "#2E7D32" },
 ];
 
 export const Shrub = React.memo(({ position, isSelected, onSelect, onPointerDown, objectId, globalAge = 1,
@@ -106,8 +106,8 @@ export const Shrub = React.memo(({ position, isSelected, onSelect, onPointerDown
 
 // Define what's editable for a Shrub
 Shrub.editorSchema = [
-    { name: 'maxRadius', label: 'Radius', type: 'number', step: 0.1, min: 0.1, max: 2.5 },
-    { name: 'color', label: 'Color', type: 'color' },
+    { name: 'maxRadius', label: 'Radius', type: 'number', step: 0.1, min: 0.1, max: 2.5, defaultValue: 0.4 },
+    { name: 'color', label: 'Color', type: 'color', defaultValue: "#556B2F" },
 ];
 
 export const Grass = React.memo(({ position, isSelected, onSelect, onPointerDown, objectId, globalAge = 1,
@@ -133,11 +133,11 @@ export const Grass = React.memo(({ position, isSelected, onSelect, onPointerDown
 });
 // Define what's editable for Grass
 Grass.editorSchema = [
-    { name: 'maxHeight', label: 'Height', type: 'number', step: 0.05, min: 0.05, max: 1.5 },
-    { name: 'maxWidth', label: 'Width', type: 'number', step: 0.05, min: 0.05, max: 1.5 },
-    { name: 'bladeColor1', label: 'Color 1', type: 'color' },
-    { name: 'bladeColor2', label: 'Color 2', type: 'color' },
-    { name: 'bladeColor3', label: 'Color 3', type: 'color' },
+    { name: 'maxHeight', label: 'Height', type: 'number', step: 0.05, min: 0.05, max: 1.5, defaultValue: 0.3 },
+    { name: 'maxWidth', label: 'Width', type: 'number', step: 0.05, min: 0.05, max: 1.5, defaultValue: 0.4 },
+    { name: 'bladeColor1', label: 'Color 1', type: 'color', defaultValue: "#7CFC00" },
+    { name: 'bladeColor2', label: 'Color 2', type: 'color', defaultValue: "#90EE90" },
+    { name: 'bladeColor3', label: 'Color 3', type: 'color', defaultValue: "#9ACD32" },
 ];
 
 // --- Map of Components and Schemas for easy lookup ---

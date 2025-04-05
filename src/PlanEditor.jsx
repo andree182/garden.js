@@ -87,7 +87,7 @@ const SceneWithLogic = forwardRef(({
     const [objects, setObjects] = useState(() => { // Initial objects with worldX/Z and properties
         const initialGridObjects = [
             { id: 1, type: 'tree', gridX: 5, gridZ: 5 },
-            { id: 2, type: 'tree', gridX: 15, gridZ: 8 },
+            { id: 2, type: 'tree', gridX: 15, gridZ: 8, maxFoliageHeight: 1.8, maxFoliageRadius: 0.7 },
             { id: 3, type: 'shrub', gridX: 8, gridZ: 14 },
             { id: 4, type: 'grass', gridX: 10, gridZ: 10 },
         ];
@@ -514,7 +514,7 @@ export default function PlanEditor() {
 
     const handlePropertyChange = (propName, value) => {
         if (selectedObjectId === null || !selectedObjectProps) return; let parsedValue = value; const schema = ObjectEditorSchemas[selectedObjectProps.type]; const propInfo = schema?.find(p => p.name === propName);
-        if (propInfo?.type === 'number') { parsedValue = parseFloat(value); if (isNaN(parsedValue)) parsedValue = propInfo.min ?? 0; parsedValue = Math.max(propInfo.min ?? -Infinity, Math.min(propInfo.max ?? Infinity, parsedValue)); } // Clamp number values
+        if (propInfo?.type === 'number') { parsedValue = parseFloat(value); if (isNaN(parsedValue)) parsedValue = propInfo.defaultValue ?? propInfo.min ?? 0; parsedValue = Math.max(propInfo.min ?? -Infinity, Math.min(propInfo.max ?? Infinity, parsedValue)); }
         sceneLogicRef.current?.updateObjectProperty(selectedObjectId, propName, parsedValue); setSelectedObjectProps(prevProps => ({ ...prevProps, [propName]: parsedValue }));
     };
 
@@ -530,14 +530,19 @@ export default function PlanEditor() {
     const renderPropertyEditors = () => {
         if (!selectedObjectProps) return null; const editorSchema = ObjectEditorSchemas[selectedObjectProps.type];
         if (!editorSchema) return (<div style={{ marginTop: '10px' }}>No editor defined for type: {selectedObjectProps.type}</div>);
-        const commonPropsStyle = { marginBottom: '5px' }; const labelStyle = { display: 'inline-block', width: '90px', marginRight: '5px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', verticalAlign: 'middle' }; const inputStyle = { width: 'calc(100% - 100px)', boxSizing: 'border-box', verticalAlign: 'middle' };
+        const commonPropsStyle = { marginBottom: '5px' }; const labelStyle = { /* ... */ }; const inputStyle = { /* ... */ };
         return (
              <div style={{ borderTop: '1px solid #555', paddingTop: '8px', marginTop: '8px' }}>
                 <strong>Edit {selectedObjectProps.type} (ID: {selectedObjectProps.id})</strong>
                 {editorSchema.map(propInfo => (
                     <div key={propInfo.name} style={commonPropsStyle}>
                         <label style={labelStyle} htmlFor={propInfo.name} title={propInfo.label}>{propInfo.label}:</label>
-                        <input style={inputStyle} id={propInfo.name} type={propInfo.type} step={propInfo.step} min={propInfo.min} max={propInfo.max} value={selectedObjectProps[propInfo.name] ?? (propInfo.type === 'color' ? '#000000' : (propInfo.min ?? 0))} onChange={(e) => handlePropertyChange(propInfo.name, e.target.value)} />
+                        <input
+                            style={inputStyle} id={propInfo.name} type={propInfo.type} step={propInfo.step} min={propInfo.min} max={propInfo.max}
+                            // Use current value OR schema defaultValue
+                            value={selectedObjectProps[propInfo.name] ?? propInfo.defaultValue}
+                            onChange={(e) => handlePropertyChange(propInfo.name, e.target.value)}
+                        />
                     </div>
                 ))}
             </div>
