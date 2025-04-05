@@ -272,7 +272,6 @@ function Experience({
     const dragPlaneRef = useRef();
 
     // --- Interaction State ---
-    const [potentialDragInfo, setPotentialDragInfo] = useState(null);
     const [draggingInfo, setDraggingInfo] = useState(null);
     const [isPaintingTerrain, setIsPaintingTerrain] = useState(false);
     const [paintDirection, setPaintDirection] = useState(1);
@@ -290,9 +289,9 @@ function Experience({
         if (clickedObject) {
             const groundHeight = sceneLogicRef.current?.getGroundHeightAtWorld(clickedObject.worldX, clickedObject.worldZ) ?? 0;
             // Set potential drag info
-            setPotentialDragInfo({
+            setDraggingInfo({
                 id: objectId, initialY: getWorldYBase(groundHeight) + DRAG_PLANE_OFFSET,
-                startX: event.clientX, startY: event.clientY, pointerId: event.pointerId
+                pointerId: event.pointerId
             });
             event.target?.setPointerCapture(event.pointerId);
             console.log("Potential Drag Start:", objectId);
@@ -300,11 +299,6 @@ function Experience({
     }, [currentMode, onSelectObject, sceneLogicRef]); // Add currentMode dependency
 
     const handleGridPointerDown = useCallback((event, gridX, gridZ) => {
-        // Cancel potential drag if grid is clicked
-        if (potentialDragInfo) {
-             gl.domElement.releasePointerCapture?.(potentialDragInfo.pointerId);
-             setPotentialDragInfo(null);
-        }
         if (draggingInfo || !sceneLogicRef.current) return; // Ignore grid clicks while dragging
 
         // --- Mode-Specific Actions ---
@@ -333,29 +327,22 @@ function Experience({
         }
         else if (currentMode === 'select') {
              // Click on grid in select mode deselects any selected object
-             onSelectObject(null);
+             //onSelectObject(null);
         }
 
-    }, [currentMode, potentialDragInfo, draggingInfo, brushSize, sceneLogicRef, onInteractionEnd, onSelectObject, getInitialObjectId, raycaster, pointer, camera, gl]); // Added currentMode, potentialDragInfo
+    }, [currentMode, draggingInfo, brushSize, sceneLogicRef, onInteractionEnd, onSelectObject, getInitialObjectId, raycaster, pointer, camera, gl]); // Added currentMode
 
     const handlePointerMove = useCallback((event) => {
         pointerRef.current.x = (event.clientX / window.innerWidth) * 2 - 1;
         pointerRef.current.y = -(event.clientY / window.innerHeight) * 2 + 1;
         if (!sceneLogicRef.current) return;
 
-        // Check if we should transition from potential drag to actual drag (only in select mode)
-        if (currentMode === 'select' && potentialDragInfo) {
-            const dx = event.clientX - potentialDragInfo.startX; const dy = event.clientY - potentialDragInfo.startY;
-            if ((dx * dx + dy * dy) > DRAG_THRESHOLD * DRAG_THRESHOLD) {
-                console.log("Threshold exceeded, starting actual drag");
-                setDraggingInfo({ id: potentialDragInfo.id, initialY: potentialDragInfo.initialY });
-                setPotentialDragInfo(null);
-                if (orbitControlsRef.current) orbitControlsRef.current.enabled = false;
-            } else {
-                return; // Not dragging yet
-            }
+        // If dragging, disable controls on first move
+        if (draggingInfo && orbitControlsRef.current && orbitControlsRef.current.enabled) {
+            orbitControlsRef.current.enabled = false;
+            console.log("Drag detected, disabling controls.");
         }
-
+ 
         // --- Handle actual drag or paint based on state ---
         raycaster.setFromCamera(pointerRef.current, camera);
 
@@ -370,39 +357,31 @@ function Experience({
                  if (gridX >= 0 && gridX < gridWidth && gridZ >= 0 && gridZ < gridHeight) { sceneLogicRef.current.applyTerrainBrush(gridX, gridZ, HEIGHT_MODIFIER * paintDirection); }
             }
         }
-    }, [currentMode, potentialDragInfo, draggingInfo, isPaintingTerrain, paintDirection, raycaster, camera, sceneLogicRef]); // Added currentMode
+    }, [draggingInfo, isPaintingTerrain, paintDirection, raycaster, camera, sceneLogicRef]);
 
     const handlePointerUp = useCallback((event) => {
         const pointerId = event.pointerId;
 
         if (draggingInfo) { // A drag actually occurred
             console.log("Pointer Up - Drag End");
+            gl.domElement.releasePointerCapture?.(pointerId); // Release capture first
             setDraggingInfo(null);
-            // Keep object selected after drag - DO NOT call onInteractionEnd here
             if (orbitControlsRef.current) orbitControlsRef.current.enabled = true;
-            gl.domElement.releasePointerCapture?.(pointerId);
-        } else if (potentialDragInfo) { // Only a click occurred on an object
-             console.log("Pointer Up - Click End (No Drag)");
-             if(potentialDragInfo.pointerId === pointerId) {
-                setPotentialDragInfo(null);
-                // Selection persists
-                gl.domElement.releasePointerCapture?.(pointerId);
-             }
         } else if (isPaintingTerrain) { // Painting ended
             console.log("Pointer Up - Paint End");
             setIsPaintingTerrain(false);
             if (orbitControlsRef.current) orbitControlsRef.current.enabled = true;
             gl.domElement.releasePointerCapture?.(pointerId);
         }
-    }, [draggingInfo, potentialDragInfo, isPaintingTerrain, gl /* removed onInteractionEnd */]); // Removed onInteractionEnd
+    }, [draggingInfo, isPaintingTerrain, gl /* removed onInteractionEnd */]); // Removed onInteractionEnd
 
      // Effect to add/remove global listeners
      useEffect(() => {
         const domElement = gl.domElement;
         const moveHandler = (event) => handlePointerMove(event);
         const upHandler = (event) => handlePointerUp(event);
-        // Listen if potentially dragging, actually dragging, or painting
-        if (potentialDragInfo || draggingInfo || isPaintingTerrain) {
+        // Listen if dragging, actually dragging, or painting
+        if (draggingInfo || isPaintingTerrain) {
             domElement.addEventListener('pointermove', moveHandler);
             domElement.addEventListener('pointerup', upHandler);
             domElement.addEventListener('pointerleave', upHandler); // End interaction if pointer leaves canvas
@@ -413,7 +392,7 @@ function Experience({
             domElement.removeEventListener('pointerleave', upHandler);
             if (orbitControlsRef.current) orbitControlsRef.current.enabled = true; // Ensure re-enabled
         };
-    }, [potentialDragInfo, draggingInfo, isPaintingTerrain, handlePointerMove, handlePointerUp, gl]);
+    }, [draggingInfo, isPaintingTerrain, handlePointerMove, handlePointerUp, gl]);
 
     // handlePointerMissed is now handled by the Canvas prop in PlanEditor
 
@@ -551,7 +530,7 @@ export default function PlanEditor() {
 
     // Handler for Canvas pointer missed - only deselect if in 'select' mode
     const handleCanvasPointerMissed = useCallback(() => {
-        if (currentMode === 'select') {
+        if (currentMode === 'select'  && selectedObjectId !== null) {
             setSelectedObjectId(null);
         }
     }, [currentMode]);
@@ -572,6 +551,13 @@ export default function PlanEditor() {
                  {/* ... Actions, Grid Resize, Brush Size (only relevant in terrain mode?), Aging Slider ... */}
                  <div style={{ marginBottom: '8px', borderTop: '1px solid #555', paddingTop: '8px', display: currentMode === 'terrain' ? 'block' : 'none' }}>
                     <strong>Brush Size:</strong> {brushSize}<br/> <input type="range" min="1" max="10" step="1" value={brushSize} onChange={(e) => setBrushSize(parseInt(e.target.value, 10))} style={{ width: '100%' }}/>
+                    <div style={{ marginBottom: '8px', borderTop: '1px solid #555', paddingTop: '8px' }}>
+                        <strong>Grid ({currentGridSize.w} x {currentGridSize.h}):</strong><br/>
+                        <input type="number" value={desiredWidth} onChange={(e) => setDesiredWidth(e.target.value)} min={MIN_GRID_DIM} max={MAX_GRID_DIM} style={{ width: '40px', marginRight: '3px' }}/>
+                        x
+                        <input type="number" value={desiredHeight} onChange={(e) => setDesiredHeight(e.target.value)} min={MIN_GRID_DIM} max={MAX_GRID_DIM} style={{ width: '40px', marginLeft: '3px', marginRight: '5px' }}/>
+                        <button onClick={handleResize} style={getButtonStyle('resize')}>Resize</button>
+                    </div>
                  </div>
                  {/* ... Property Editor (shown only if selectedObjectId is not null) ... */}
                  {selectedObjectId !== null && renderPropertyEditors()}
