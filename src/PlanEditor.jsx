@@ -426,6 +426,7 @@ export default function PlanEditor() {
     const [desiredWidth, setDesiredWidth] = useState(INITIAL_GRID_WIDTH);
     const [desiredHeight, setDesiredHeight] = useState(INITIAL_GRID_HEIGHT);
     const [currentGridSize, setCurrentGridSize] = useState({w: INITIAL_GRID_WIDTH, h: INITIAL_GRID_HEIGHT});
+    const [clipboard, setClipboard] = useState(null); // For copy-paste
 
     // Derive addModeObjectType from currentMode for passing down (though Experience checks currentMode directly now)
     const addModeObjectType = useMemo(() => currentMode.startsWith('add-') ? currentMode.split('-')[1] : null, [currentMode]);
@@ -497,6 +498,70 @@ export default function PlanEditor() {
         sceneLogicRef.current?.updateObjectProperty(selectedObjectId, propName, parsedValue); setSelectedObjectProps(prevProps => ({ ...prevProps, [propName]: parsedValue }));
     };
 
+
+    // --- Keyboard Shortcuts Handler ---
+    const handleKeyDown = useCallback((event) => {
+        console.log("Key Down:", event.key, "Ctrl:", event.ctrlKey, "Meta:", event.metaKey);
+
+        // --- Deselect ---
+        if (event.key === 'Escape') {
+            if (selectedObjectId !== null) {
+                console.log("ESC: Deselecting");
+                handleSelectObject(null); // Use the existing handler
+            }
+            // Potentially cancel other interactions like add mode?
+            // if (currentMode.startsWith('add-')) {
+            //     handleSetMode('select');
+            // }
+        }
+
+        // --- Delete ---
+        else if (event.key === 'Delete' && selectedObjectId !== null) {
+            console.log("DEL: Deleting selected");
+            event.preventDefault(); // Prevent browser back navigation etc.
+            handleRemoveSelected(); // Use existing handler
+        }
+
+        // --- Copy ---
+        else if ((event.ctrlKey || event.metaKey) && event.key === 'c' && selectedObjectId !== null) {
+            event.preventDefault();
+            const props = sceneLogicRef.current?.getObjectProperties(selectedObjectId);
+            if (props) {
+                const { id, ...copyData } = props; // Copy everything except the ID
+                setClipboard(copyData);
+                console.log("Copied to clipboard:", copyData);
+            }
+        }
+
+        // --- Paste ---
+        else if ((event.ctrlKey || event.metaKey) && event.key === 'v' && clipboard !== null) {
+            event.preventDefault();
+            console.log("Pasting from clipboard:", clipboard);
+            const newId = getNextObjectId();
+            // Simple paste: offset slightly from original position
+            const pasteOffset = CELL_SIZE * 0.5;
+            const newWorldX = (clipboard.worldX ?? 0) + pasteOffset;
+            const newWorldZ = (clipboard.worldZ ?? 0) + pasteOffset;
+            sceneLogicRef.current?.addObject({ ...clipboard, id: newId, worldX: newWorldX, worldZ: newWorldZ });
+        }
+
+        // --- Nudge (Arrow Keys) ---
+        else if (event.key.startsWith('Arrow') && selectedObjectId !== null) {
+            event.preventDefault(); // Prevent scrolling
+            const nudgeAmount = CELL_SIZE * 0.1;
+            const currentProps = sceneLogicRef.current?.getObjectProperties(selectedObjectId);
+            if (!currentProps) return;
+
+            let dx = 0; let dz = 0;
+            if (event.key === 'ArrowUp') dz = -nudgeAmount;
+            else if (event.key === 'ArrowDown') dz = nudgeAmount;
+            else if (event.key === 'ArrowLeft') dx = -nudgeAmount;
+            else if (event.key === 'ArrowRight') dx = nudgeAmount;
+
+            sceneLogicRef.current?.updateObjectPositionWorld(selectedObjectId, currentProps.worldX + dx, currentProps.worldZ + dz);
+        }
+    }, [selectedObjectId, clipboard, currentMode, handleSelectObject, handleRemoveSelected, getNextObjectId]); // Add dependencies
+
     const instructions = useMemo(() => {
          switch(currentMode) {
             case 'select': return "Click object to select/edit properties. Drag selected object to move.";
@@ -534,6 +599,16 @@ export default function PlanEditor() {
             setSelectedObjectId(null);
         }
     }, [currentMode]);
+
+    // --- Effect for Global Key Listener ---
+    useEffect(() => {
+        console.log("Attaching keydown listener");
+        window.addEventListener('keydown', handleKeyDown);
+        return () => {
+            console.log("Removing keydown listener");
+            window.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [handleKeyDown]); // Re-attach if handler changes (due to dependencies)
 
     return (
         <div style={{ height: '100vh', width: '100vw', display: 'flex', flexDirection: 'column', background: '#282c34' }}>
