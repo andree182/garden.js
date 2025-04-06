@@ -87,6 +87,8 @@ const SceneWithLogic = forwardRef(({
     const [heightData, setHeightData] = useState(() => getInitialHeightData(INITIAL_GRID_WIDTH, INITIAL_GRID_HEIGHT));
     const [colorData, setColorData] = useState(() => getInitialColorData(heightData));
 
+    const sanitizeObjectsArray = (arr) => Array.isArray(arr) ? arr.filter(obj => obj && typeof obj === 'object' && obj.id != null) : [];
+
     const generateDefaultState = () => {
         console.log("Generating default scene state...");
         const defaultHeightData = getInitialHeightData(INITIAL_GRID_WIDTH, INITIAL_GRID_HEIGHT);
@@ -124,7 +126,7 @@ const SceneWithLogic = forwardRef(({
                         return Math.max(max, (obj && obj.id) ? obj.id : 0);
                     }, 0);
                     nextObjectId = maxId + 1;
-                    return { heightData: parsed.heightData, colorData: parsed.colorData, objects: parsed.objects };
+                    return { heightData: parsed.heightData, colorData: parsed.colorData, objects: sanitizeObjectsArray(parsed.objects) };
                 } else {
                      console.warn("localStorage data invalid or old version, generating default.");
                 }
