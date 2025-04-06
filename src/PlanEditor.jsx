@@ -382,6 +382,19 @@ const SceneWithLogic = forwardRef(({
     const groundPlaneSize = useMemo(() => [gridWidth * CELL_SIZE + 4, gridHeight * CELL_SIZE + 4], [gridWidth, gridHeight]);
     const avgHeight = useMemo(() => { if (gridWidth === 0 || gridHeight === 0) return 0; let t = 0; let c = 0; for (let z = 0; z < gridHeight; z++) { for (let x = 0; x < gridWidth; x++) { t += heightData[z]?.[x] ?? 0; c++; } } return c > 0 ? t / c : 0; }, [heightData, gridWidth, gridHeight]);
 
+    // --- Shadow Camera Configuration ---
+    const shadowCameraProps = useMemo(() => {
+        const size = Math.max(gridWidth, gridHeight) * CELL_SIZE * 0.75; // Cover slightly more than half the max dimension
+        return {
+            near: 0.5,
+            far: Math.max(gridWidth, gridHeight) * CELL_SIZE * 2 + 50, // Ensure far plane is distant enough
+            left: -size,
+            right: size,
+            top: size,
+            bottom: -size,
+        };
+    }, [gridWidth, gridHeight]); // Update if grid size changes
+
     // --- Calculate Light Position based on Azimuth/Elevation ---
     const lightPosition = useMemo(() => {
         const distance = Math.max(gridWidth, gridHeight) * 1.5; // Distance from center
@@ -401,7 +414,21 @@ const SceneWithLogic = forwardRef(({
     return (
         <>
             <ambientLight intensity={0.6} />
-            <directionalLight position={lightPosition} intensity={1.0} castShadow shadow-mapSize-width={1024} shadow-mapSize-height={1024} target-position={[0,0,0]}/> {/* Ensure light targets origin */}
+            <directionalLight
+                position={lightPosition}
+                intensity={1.0}
+                castShadow
+                shadow-mapSize-width={1024} // Or 2048 for better quality
+                shadow-mapSize-height={1024}
+                shadow-camera-near={shadowCameraProps.near}
+                shadow-camera-far={shadowCameraProps.far}
+                shadow-camera-left={shadowCameraProps.left}
+                shadow-camera-right={shadowCameraProps.right}
+                shadow-camera-top={shadowCameraProps.top}
+                shadow-camera-bottom={shadowCameraProps.bottom}
+                shadow-bias={-0.002} // Optional: Adjust if shadow acne appears
+                target-position={[0,0,0]} // Ensure light targets origin
+            />
             {/* <directionalLight position={[gridWidth * 0.5, 15 + avgHeight, gridHeight * 0.5]} intensity={1.0} castShadow shadow-mapSize-width={1024} shadow-mapSize-height={1024} /> */}
             <group>{gridCells}</group>
             <group>{renderedObjects}</group>
