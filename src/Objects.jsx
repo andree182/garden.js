@@ -268,6 +268,55 @@ Grass.editorSchema = [
 
 // --- Map of Components and Schemas for easy lookup ---
 export const ObjectComponents = { tree: Tree, shrub: Shrub, grass: Grass };
+
+export const objectConfigurations = [
+    // Trees
+    {
+        name: "Pine Tree (Tall)",
+        type: "tree",
+        props: {
+            maxTrunkHeight: 1.6, maxFoliageHeight: 2.5, maxFoliageRadius: 0.6,
+            foliageColor: "#2E6B2F", trunkColor: "#654321"
+            // Other props will use defaults from schema if not specified
+        }
+    },
+    {
+        name: "Oak Tree (Wide)",
+        type: "tree",
+        props: {
+            maxTrunkHeight: 0.7, maxFoliageHeight: 1.8, maxFoliageRadius: 1.4,
+            foliageColor: "#556B2F", trunkColor: "#8B4513"
+        }
+    },
+    {
+        name: "Default Tree", // Keep the original default
+        type: "tree",
+        props: {} // Will use all defaults from schema
+    },
+    // Shrubs
+    {
+        name: "Small Bush",
+        type: "shrub",
+        props: { maxRadius: 0.3, color: "#4F7942" }
+    },
+    {
+        name: "Large Bush",
+        type: "shrub",
+        props: { maxRadius: 0.6, color: "#556B2F" }
+    },
+    // Grass
+    {
+        name: "Default Grass",
+        type: "grass",
+        props: {} // Uses defaults from schema
+    },
+     {
+        name: "Dry Grass Patch",
+        type: "grass",
+        props: { bottomColor: "#8B8B5A", topColor: "#C4C482", colorRatio: 0.6, length: 0.2 }
+    },
+];
+
 export const ObjectEditorSchemas = {
     tree: Tree.editorSchema,
     shrub: Shrub.editorSchema,

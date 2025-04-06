@@ -5,7 +5,7 @@ import { OrbitControls, PerspectiveCamera, Box, Plane, Text } from '@react-three
 import * as THREE from 'three';
 
 // Import object components AND their editor schemas
-import { ObjectComponents, ObjectEditorSchemas } from './Objects.jsx';
+import { ObjectComponents, ObjectEditorSchemas, objectConfigurations } from './Objects.jsx';
 
 // --- Configuration ---
 const CELL_SIZE = 1;
@@ -374,7 +374,7 @@ const SceneWithLogic = forwardRef(({
 // --- Experience Component (Handles R3F Context and Interactions based on Mode) ---
 function Experience({
     currentMode, // Explicit mode from PlanEditor
-    addModeObjectType, // Only used when currentMode is 'add-*'
+    selectedObjectToAdd, // NEW: Pass the selected configuration to add
     selectedObjectId, // Read-only, selection managed by PlanEditor via onSelectObject
     globalAge, brushSize, // Props for rendering/API
     sceneLogicRef, onSelectObject, onInteractionEnd, getInitialObjectId, showCoordinates, paintColor // Refs/Callbacks
@@ -561,9 +561,8 @@ export default function PlanEditor() {
     const [paintColor, setPaintColor] = useState(COLORS[1]); // Default paint color
     const [showCoordinates, setShowCoordinates] = useState(true);
     const [clipboard, setClipboard] = useState(null); // For copy-paste
-
-    // Derive addModeObjectType from currentMode for passing down (though Experience checks currentMode directly now)
-    const addModeObjectType = useMemo(() => currentMode.startsWith('add-') ? currentMode.split('-')[1] : null, [currentMode]);
+    const [showAddObjectList, setShowAddObjectList] = useState(false);
+    const [selectedObjectToAdd, setSelectedObjectToAdd] = useState(null);
 
     const getNextObjectId = useCallback(() => nextObjectId++, []);
     const getButtonStyle = (modeOrAction, disabled = false) => ({ margin: '2px', padding: '4px 8px', border: currentMode === modeOrAction ? '2px solid #eee' : '2px solid transparent', backgroundColor: disabled ? '#666' : (currentMode === modeOrAction ? '#555' : '#333'), color: disabled ? '#aaa' : 'white', cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.6 : 1 });
@@ -583,20 +582,45 @@ export default function PlanEditor() {
     const onFileSelected = useCallback((event) => {
         const file = event.target.files[0]; if (!file) return; const reader = new FileReader();
         reader.onload = (e) => {
-            try { const jsonString = e.target.result; const loadedData = JSON.parse(jsonString); const newSize = sceneLogicRef.current?.load(loadedData); if (newSize) { setDesiredWidth(newSize.newWidth); setDesiredHeight(newSize.newHeight); setCurrentGridSize({w: newSize.newWidth, h: newSize.newHeight}); } setSelectedObjectId(null); setAddModeObjectType(null); }
+            try { const jsonString = e.target.result; const loadedData = JSON.parse(jsonString); const newSize = sceneLogicRef.current?.load(loadedData); if (newSize) { setDesiredWidth(newSize.newWidth); setDesiredHeight(newSize.newHeight); setCurrentGridSize({w: newSize.newWidth, h: newSize.newHeight}); } setSelectedObjectId(null); }
             catch (error) { console.error("Load Error:", error); alert(`Failed to load: ${error.message}`); }
             finally { if (fileInputRef.current) fileInputRef.current.value = ""; }
         }; reader.onerror = (e) => { console.error("Read Error:", e); alert("Error reading file."); if (fileInputRef.current) fileInputRef.current.value = ""; }; reader.readAsText(file);
     }, []);
 
     // Handler to change the main mode
-    const handleSetMode = (newMode) => {
+const handleSetMode = (newMode) => {
         console.log("Setting mode to:", newMode);
         setCurrentMode(newMode);
-        // Deselect object when changing away from 'select' mode or into an 'add' mode
-        if (newMode !== 'select' || newMode.startsWith('add-')) {
-             setSelectedObjectId(null);
+        setShowAddObjectList(false); // Hide list when changing mode
+        setSelectedObjectToAdd(null); // Clear pending add object
+        if (newMode !== 'select') { setSelectedObjectId(null); } // Deselect if not in select mode
+    };
+
+    const handleAddObjectClick = () => {
+        if (showAddObjectList) {
+            // If list is open, clicking again closes it and cancels placement intent
+            setShowAddObjectList(false);
+            setSelectedObjectToAdd(null);
+            setCurrentMode('select'); // Revert to select mode
+        } else if (selectedObjectToAdd) {
+             // If list is closed but an object is selected for placement, cancel placement
+             setSelectedObjectToAdd(null);
+             setCurrentMode('select'); // Revert to select mode
         }
+        else {
+            // Open the list
+            setShowAddObjectList(true);
+            setCurrentMode('add-object-menu'); // Special mode while menu is open
+            setSelectedObjectId(null); // Deselect any object
+        }
+    };
+
+    const handleSelectConfiguration = (config) => {
+        setSelectedObjectToAdd(config);
+        setShowAddObjectList(false);
+        setCurrentMode('placing-object'); // Mode indicates user should click terrain
+        console.log("Selected configuration for placement:", config.name);
     };
 
     // Callback from Experience when an object is selected
@@ -709,11 +733,12 @@ export default function PlanEditor() {
     const instructions = useMemo(() => {
          switch(currentMode) {
             case 'select': return "Click object to select/edit properties. Drag selected object to move.";
-            case 'terrain': return "Click/Drag grid to modify height (Shift=Lower).";
-            case 'add-tree': case 'add-shrub': case 'add-grass': return `Click terrain to add ${addModeObjectType}.`;
+            case 'terrain': return "Click/Drag grid to modify height (Shift=Lower). Esc to exit.";
+            case 'paint-color': return "Click/Drag grid to paint color. Esc to exit.";
+            case 'add-object-menu': return "Choose an object from the list below to place.";
             default: return "Select a mode.";
         }
-    }, [currentMode, addModeObjectType]);
+    }, [currentMode, selectedObjectToAdd]);
 
     const renderPropertyEditors = () => {
         if (!selectedObjectProps) return null; const editorSchema = ObjectEditorSchemas[selectedObjectProps.type];
@@ -744,6 +769,49 @@ export default function PlanEditor() {
         }
     }, [currentMode]);
 
+    const renderAddObjectList = () => {
+        if (!showAddObjectList) return null;
+
+        const listStyle = {
+            position: 'absolute', // Position relative to the main UI panel or PlanEditor div
+            left: '235px', // Position next to the main panel
+            top: '10px',
+            background: 'rgba(40, 40, 40, 0.9)',
+            padding: '10px',
+            borderRadius: '5px',
+            maxHeight: 'calc(100vh - 40px)',
+            overflowY: 'auto',
+            zIndex: 2, // Ensure it's above other UI elements if needed
+            border: '1px solid #666',
+            color: 'white',
+            fontSize: '12px'
+        };
+        const itemStyle = {
+            padding: '4px 8px',
+            cursor: 'pointer',
+            borderBottom: '1px solid #555'
+        };
+        const itemHoverStyle = { backgroundColor: '#555' }; // Basic hover effect
+
+        return (
+            <div style={listStyle}>
+                <strong>Select Object to Add:</strong>
+                {objectConfigurations.map((config, index) => (
+                    <div
+                        key={config.name + index} // Use name + index for key
+                        style={itemStyle}
+                        onClick={() => handleSelectConfiguration(config)}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = itemHoverStyle.backgroundColor}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                    >
+                        {config.name} ({config.type})
+                    </div>
+                ))}
+                 <button onClick={() => { setShowAddObjectList(false); setCurrentMode('select'); }} style={{marginTop: '10px', width: '100%'}}>Cancel</button>
+            </div>
+        );
+    };
+
     // --- Effect for Global Key Listener ---
     useEffect(() => {
         console.log("Attaching keydown listener");
@@ -765,9 +833,9 @@ export default function PlanEditor() {
                      <button style={getButtonStyle('select')} onClick={() => handleSetMode('select')}>Select/Move</button>
                      <button style={getButtonStyle('terrain')} onClick={() => handleSetMode('terrain')}>Edit Terrain</button>
                      <button style={getButtonStyle('paint-color')} onClick={() => handleSetMode('paint-color')}>Paint Color</button>
-                     <button style={getButtonStyle('add-tree')} onClick={() => handleSetMode('add-tree')}>Add Tree</button>
-                     <button style={getButtonStyle('add-shrub')} onClick={() => handleSetMode('add-shrub')}>Add Shrub</button>
-                     <button style={getButtonStyle('add-grass')} onClick={() => handleSetMode('add-grass')}>Add Grass</button>
+                     <button style={getButtonStyle(currentMode.startsWith('add-') || currentMode === 'placing-object' || currentMode === 'add-object-menu' ? 'add-object-menu' : 'add-object')} onClick={handleAddObjectClick}>
+                         {selectedObjectToAdd ? `Placing: ${selectedObjectToAdd.name.substring(0,10)}...` : (showAddObjectList ? 'Cancel Add' : 'Add Object')}
+                     </button>
                  </div>
                 <strong>Actions:</strong><br/> <button onClick={onLoadClick} style={getButtonStyle('load')}>Load</button> <button onClick={onSaveClick} style={getButtonStyle('save')}>Save</button>
                 <button onClick={handleReset} style={getButtonStyle('reset')}>Reset</button> <button onClick={handleRemoveSelected} disabled={selectedObjectId === null} style={getButtonStyle('remove', selectedObjectId === null)}>Remove</button>
@@ -805,13 +873,15 @@ export default function PlanEditor() {
                  {/* ... Instructions ... */}
             </div>
 
+            {renderAddObjectList()}
+
             <input type="file" ref={fileInputRef} onChange={onFileSelected} accept=".json,application/json" style={{ display: 'none' }} />
 
              <div style={{ flexGrow: 1, overflow: 'hidden' }}>
                 <Canvas shadows onPointerMissed={handleCanvasPointerMissed}>
                     <Experience
                          currentMode={currentMode} // Pass down the explicit mode
-                         addModeObjectType={addModeObjectType} // Still needed for add logic? Maybe not if checking currentMode
+                         selectedObjectToAdd={selectedObjectToAdd} 
                          selectedObjectId={selectedObjectId} // Pass down selection
                          globalAge={globalAge} brushSize={brushSize} sceneLogicRef={sceneLogicRef}
                          onSelectObject={handleSelectObject} onInteractionEnd={handleInteractionEnd} getInitialObjectId={getNextObjectId}
