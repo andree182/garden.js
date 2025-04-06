@@ -81,7 +81,7 @@ const GridCell = React.memo(({ x, z, height, color, onPointerDown, gridWidth, gr
 const SceneWithLogic = forwardRef(({
     selectedObjectId, globalAge, brushSize, // Props
     onObjectSelect, onObjectPointerDown, onGridPointerDown, onInteractionEnd,
-    showCoordinates
+    showCoordinates, sunAzimuth, sunElevation
 }, ref) => {
     // --- State ---
     const [heightData, setHeightData] = useState(() => getInitialHeightData(INITIAL_GRID_WIDTH, INITIAL_GRID_HEIGHT));
@@ -373,10 +373,27 @@ const SceneWithLogic = forwardRef(({
     const groundPlaneSize = useMemo(() => [gridWidth * CELL_SIZE + 4, gridHeight * CELL_SIZE + 4], [gridWidth, gridHeight]);
     const avgHeight = useMemo(() => { if (gridWidth === 0 || gridHeight === 0) return 0; let t = 0; let c = 0; for (let z = 0; z < gridHeight; z++) { for (let x = 0; x < gridWidth; x++) { t += heightData[z]?.[x] ?? 0; c++; } } return c > 0 ? t / c : 0; }, [heightData, gridWidth, gridHeight]);
 
+    // --- Calculate Light Position based on Azimuth/Elevation ---
+    const lightPosition = useMemo(() => {
+        const distance = Math.max(gridWidth, gridHeight) * 1.5; // Distance from center
+        const azimuthRad = THREE.MathUtils.degToRad(sunAzimuth);
+        const elevationRad = THREE.MathUtils.degToRad(sunElevation);
+
+        // Spherical to Cartesian conversion
+        const x = distance * Math.cos(elevationRad) * Math.sin(azimuthRad);
+        const y = distance * Math.sin(elevationRad); // Height above the center plane
+        const z = distance * Math.cos(elevationRad) * Math.cos(azimuthRad);
+
+        // Offset slightly by average terrain height? Optional.
+        // const offsetY = avgHeight / 2;
+        return new THREE.Vector3(x, y + 10, z); // Add base height offset
+    }, [sunAzimuth, sunElevation, gridWidth, gridHeight /*, avgHeight */]);
+
     return (
         <>
             <ambientLight intensity={0.6} />
-            <directionalLight position={[gridWidth * 0.5, 15 + avgHeight, gridHeight * 0.5]} intensity={1.0} castShadow shadow-mapSize-width={1024} shadow-mapSize-height={1024} />
+            <directionalLight position={lightPosition} intensity={1.0} castShadow shadow-mapSize-width={1024} shadow-mapSize-height={1024} target-position={[0,0,0]}/> {/* Ensure light targets origin */}
+            {/* <directionalLight position={[gridWidth * 0.5, 15 + avgHeight, gridHeight * 0.5]} intensity={1.0} castShadow shadow-mapSize-width={1024} shadow-mapSize-height={1024} /> */}
             <group>{gridCells}</group>
             <group>{renderedObjects}</group>
             <group>{coordinateLabels}</group>
@@ -392,7 +409,7 @@ function Experience({
     selectedObjectToAdd, // NEW: Pass the selected configuration to add
     selectedObjectId, // Read-only, selection managed by PlanEditor via onSelectObject
     globalAge, brushSize, // Props for rendering/API
-    sceneLogicRef, onSelectObject, onInteractionEnd, getInitialObjectId, showCoordinates, paintColor // Refs/Callbacks
+    sceneLogicRef, onSelectObject, onInteractionEnd, getInitialObjectId, showCoordinates, paintColor, sunAzimuth, sunElevation // Refs/Callbacks
 }) {
     const { raycaster, pointer, camera, gl } = useThree();
     const orbitControlsRef = useRef();
@@ -553,7 +570,7 @@ function Experience({
             <SceneWithLogic
                 ref={sceneLogicRef} selectedObjectId={selectedObjectId} globalAge={globalAge} brushSize={brushSize}
                 onObjectSelect={onSelectObject} onObjectPointerDown={handleObjectPointerDown} onGridPointerDown={handleGridPointerDown} showCoordinates={showCoordinates}
-                onInteractionEnd={onInteractionEnd} // Pass down for Add/Resize
+                onInteractionEnd={onInteractionEnd} sunAzimuth={sunAzimuth} sunElevation={sunElevation} // Pass down for Add/Resize
             />
             {draggingInfo && (<Plane ref={dragPlaneRef} args={[10000, 10000]} rotation={[-Math.PI / 2, 0, 0]} position={[0, draggingInfo.initialY, 0]} visible={false} />)}
             {/* Disable controls only when actually dragging or painting */}
@@ -582,6 +599,8 @@ export default function PlanEditor() {
     const [clipboard, setClipboard] = useState(null); // For copy-paste
     const [showAddObjectList, setShowAddObjectList] = useState(false);
     const [selectedObjectToAdd, setSelectedObjectToAdd] = useState(null);
+    const [sunAzimuth, setSunAzimuth] = useState(45); // Default: Northeast-ish
+    const [sunElevation, setSunElevation] = useState(60); // Default: Fairly high sun
 
     const getNextObjectId = useCallback(() => nextObjectId++, []);
 
@@ -911,7 +930,20 @@ export default function PlanEditor() {
                  <div style={{ marginBottom: '8px', borderTop: '1px solid #555', paddingTop: '8px' }}>
                      <strong>Global Age:</strong> {globalAge.toFixed(2)}<br/> <input type="range" min="0" max="1" step="0.01" value={globalAge} onChange={(e) => setGlobalAge(parseFloat(e.target.value))} style={{ width: '100%' }} />
                  </div>
-                 
+
+                 {/* Sun Position Controls */}
+                 <div style={{ marginBottom: '8px', borderTop: '1px solid #555', paddingTop: '8px' }}>
+                     <strong>Sun Position:</strong>
+                     <div style={{marginBottom: '3px'}}>
+                         <label>Azimuth: {sunAzimuth}°</label><br/>
+                         <input type="range" min="0" max="360" step="1" value={sunAzimuth} onChange={(e) => setSunAzimuth(parseInt(e.target.value, 10))} style={{ width: '100%' }} />
+                     </div>
+                     <div>
+                         <label>Elevation: {sunElevation}°</label><br/>
+                         <input type="range" min="0" max="90" step="1" value={sunElevation} onChange={(e) => setSunElevation(parseInt(e.target.value, 10))} style={{ width: '100%' }} />
+                     </div>
+                 </div>
+
                  <div style={{ borderTop: '1px solid #555', paddingTop: '8px', marginTop: '8px', display: currentMode === 'placing' ? 'block' : 'none' }} >
                      <strong>Add Object:{selectedObjectToAdd?.name}</strong>
                      {Object.entries(groupedConfigurations).map(([type, configs]) => (
@@ -950,6 +982,8 @@ export default function PlanEditor() {
                          onSelectObject={handleSelectObject} onInteractionEnd={handleInteractionEnd} getInitialObjectId={getNextObjectId}
                          showCoordinates={showCoordinates}
                          paintColor={paintColor}
+                         sunAzimuth={sunAzimuth} // Pass down sun state
+                         sunElevation={sunElevation} // Pass down sun state
                     />
                 </Canvas>
             </div>
