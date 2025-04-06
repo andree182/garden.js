@@ -83,11 +83,8 @@ const SceneWithLogic = forwardRef(({
     onObjectSelect, onObjectPointerDown, onGridPointerDown, onInteractionEnd,
     showCoordinates, sunAzimuth, sunElevation, terrainPaintMode, absolutePaintHeight
 }, ref) => {
-    // --- State ---
-    const [heightData, setHeightData] = useState(() => getInitialHeightData(INITIAL_GRID_WIDTH, INITIAL_GRID_HEIGHT));
-    const [colorData, setColorData] = useState(() => getInitialColorData(heightData));
-
     const sanitizeObjectsArray = (arr) => Array.isArray(arr) ? arr.filter(obj => obj && typeof obj === 'object' && obj.id != null) : [];
+    const CURRENT_SAVE_VERSION = 5;
 
     const generateDefaultState = () => {
         console.log("Generating default scene state...");
@@ -119,7 +116,6 @@ const SceneWithLogic = forwardRef(({
         if (savedData) {
             try {
                 const parsed = JSON.parse(savedData);
-                console.log(parsed);
                 // Basic validation - could be more thorough
                 if (parsed && parsed.heightData && parsed.colorData && parsed.objects && parsed.version === 5) {
                     console.log("Loaded state from localStorage");
@@ -139,6 +135,8 @@ const SceneWithLogic = forwardRef(({
         return generateDefaultState();
     });
 
+    const [heightData, setHeightData] = useState(initialState.heightData);
+    const [colorData, setColorData] = useState(initialState.colorData);
     const [objects, setObjects] = useState(initialState.objects);
     const gridHeight = useMemo(() => heightData.length, [heightData]);
     const gridWidth = useMemo(() => (heightData[0] ? heightData[0].length : 0), [heightData]);
@@ -219,10 +217,9 @@ const SceneWithLogic = forwardRef(({
         }
         saveTimeoutRef.current = setTimeout(() => {
             try {
-                const saveData = { version: 5, heightData, colorData, objects };
+                const saveData = { version: CURRENT_SAVE_VERSION, heightData, colorData, objects };
                 localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(saveData));
                 console.log("Autosaved state to localStorage");
-                console.log(saveData);
             } catch (e) {
                 console.error("Failed to save state to localStorage:", e);
             }
@@ -234,7 +231,7 @@ const SceneWithLogic = forwardRef(({
      // --- Imperative API ---
     useImperativeHandle(ref, () => ({
         // TODO: Cleanup null objects
-        save: () => ({ version: 5, heightData, colorData, objects }),
+        save: () => ({ version: CURRENT_SAVE_VERSION, heightData, colorData, objects }),
         load: (loadedData) => {
             if (!loadedData || typeof loadedData !== 'object') throw new Error("Invalid data");
             const version = loadedData.version ?? 1;
@@ -248,13 +245,6 @@ const SceneWithLogic = forwardRef(({
 
             const processedObjects = loadedData.objects.map(obj => {
                  let baseObj = { ...obj };
-                 // Convert grid coords from older versions
-                 if (version < 4 && baseObj.gridX !== undefined && baseObj.gridZ !== undefined) {
-                     const groundHeight = hDataForConvert[baseObj.gridZ]?.[baseObj.gridX] ?? 0;
-                     const [wX, , wZ] = gridToWorldCenter(baseObj.gridX, baseObj.gridZ, groundHeight, currentW, currentH);
-                     baseObj.worldX = wX; baseObj.worldZ = wZ;
-                     delete baseObj.gridX; delete baseObj.gridZ;
-                 }
                  // Add defaults based on SCHEMAS for robustness
                  const schema = ObjectEditorSchemas[baseObj.type];
                  if (schema) {
@@ -274,7 +264,7 @@ const SceneWithLogic = forwardRef(({
             nextObjectId = maxId + 1;
              // Trigger autosave after load
              if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-             localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({ version: 5, heightData: loadedData.heightData, colorData: loadedData.colorData, objects: processedObjects }));
+             localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({ version: CURRENT_SAVE_VERSION, heightData: loadedData.heightData, colorData: loadedData.colorData, objects: processedObjects }));
             return { newWidth: currentW, newHeight: currentH };
         },
         resizeGrid: (newWidth, newHeight) => {
