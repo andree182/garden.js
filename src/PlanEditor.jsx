@@ -18,6 +18,7 @@ const MAX_GRID_DIM = 100;
 const COLORS = ['#8BC34A', '#CDDC39', '#FFEB3B', '#FFC107', '#FF9800', '#795548']; // Terrain Colors
 const DRAG_PLANE_OFFSET = 0.1; // Place drag plane slightly above ground
 const DRAG_THRESHOLD = 5; // Minimum pixels pointer must move to initiate a drag
+const LOCAL_STORAGE_KEY = 'planEditorSaveData_v5'; // Key for localStorage, update if format changes significantly
 
 // --- Helper Functions ---
 const getInitialHeight = (x, z, width, height) => {
@@ -84,31 +85,56 @@ const SceneWithLogic = forwardRef(({
     // --- State ---
     const [heightData, setHeightData] = useState(() => getInitialHeightData(INITIAL_GRID_WIDTH, INITIAL_GRID_HEIGHT));
     const [colorData, setColorData] = useState(() => getInitialColorData(heightData));
-    const [objects, setObjects] = useState(() => { // Initial objects with worldX/Z and properties
-        const initialGridObjects = [
-            { id: 1, type: 'tree', gridX: 5, gridZ: 5 },
-            { id: 2, type: 'tree', gridX: 15, gridZ: 8, maxFoliageHeight: 1.8, maxFoliageRadius: 0.7 },
-            { id: 3, type: 'shrub', gridX: 8, gridZ: 14 },
-            { id: 4, type: 'grass', gridX: 10, gridZ: 10 },
-        ];
-        nextObjectId = 5;
-        const hData = getInitialHeightData(INITIAL_GRID_WIDTH, INITIAL_GRID_HEIGHT);
-        return initialGridObjects.map(obj => {
+
+    const generateDefaultState = () => {
+        console.log("Generating default scene state...");
+        const defaultHeightData = getInitialHeightData(INITIAL_GRID_WIDTH, INITIAL_GRID_HEIGHT);
+        const defaultColorData = getInitialColorData(defaultHeightData);
+         const initialGridObjects = [
+             { id: 1, type: 'tree', gridX: 5, gridZ: 5 }, // Base info
+             { id: 2, type: 'tree', gridX: 15, gridZ: 8, maxFoliageHeight: 1.8, maxFoliageRadius: 0.7 }, // Override some defaults
+             { id: 3, type: 'shrub', gridX: 8, gridZ: 14 },
+             { id: 4, type: 'grass', gridX: 10, gridZ: 10 },
+         ];
+        nextObjectId = 5; // Reset counter
+
+        const defaultObjects = initialGridObjects.map(obj => {
             // Add defaults based on schema for initial objects
             const defaults = {};
             const schema = ObjectEditorSchemas[obj.type];
             if (schema) {
                 schema.forEach(propInfo => {
-                    defaults[propInfo.name] = propInfo.defaultValue ?? (propInfo.type === 'color' ? '#CCCCCC' : (propInfo.min ?? 0.5));
-                 });
+                    defaults[propInfo.name] = propInfo.defaultValue ?? (propInfo.type === 'color' ? '#CCCCCC' : (propInfo.min ?? 0.5))
+                });
+            }});
+        return { heightData: defaultHeightData, colorData: defaultColorData, objects: defaultObjects };
+    };
+
+    const [initialState] = useState(() => {
+        const savedData = localStorage.getItem(LOCAL_STORAGE_KEY);
+        if (savedData) {
+            try {
+                const parsed = JSON.parse(savedData);
+                // Basic validation - could be more thorough
+                if (parsed && parsed.heightData && parsed.colorData && parsed.objects && parsed.version === 5) {
+                    console.log("Loaded state from localStorage");
+                    // Reset nextObjectId based on loaded data
+                    const maxId = parsed.objects.reduce((max, obj) => {
+                        return Math.max(max, (obj && obj.id) ? obj.id : 0);
+                    }, 0);
+                    nextObjectId = maxId + 1;
+                    return { heightData: parsed.heightData, colorData: parsed.colorData, objects: parsed.objects };
+                } else {
+                     console.warn("localStorage data invalid or old version, generating default.");
+                }
+            } catch (e) {
+                console.error("Failed to parse localStorage data, generating default.", e);
             }
-             // Convert grid pos to world pos
-             const groundHeight = hData[obj.gridZ]?.[obj.gridX] ?? 0;
-             const [worldX, , worldZ] = gridToWorldCenter(obj.gridX, obj.gridZ, groundHeight, INITIAL_GRID_WIDTH, INITIAL_GRID_HEIGHT);
-             const { gridX, gridZ, ...rest } = obj;
-             return { ...defaults, ...rest, worldX, worldZ }; // Apply defaults, then obj data
-        });
-     });
+        }
+        return generateDefaultState();
+    });
+
+    const [objects, setObjects] = useState(initialState.objects);
     const gridHeight = useMemo(() => heightData.length, [heightData]);
     const gridWidth = useMemo(() => (heightData[0] ? heightData[0].length : 0), [heightData]);
     function getInitialHeightData(width, height) {
@@ -155,8 +181,29 @@ const SceneWithLogic = forwardRef(({
         return 0;
     }, [heightData, gridWidth, gridHeight]);
 
+    // --- Auto-Save to localStorage ---
+    const saveTimeoutRef = useRef(null);
+    useEffect(() => {
+        // Debounce saving
+        if (saveTimeoutRef.current) {
+            clearTimeout(saveTimeoutRef.current);
+        }
+        saveTimeoutRef.current = setTimeout(() => {
+            try {
+                const saveData = { version: 5, heightData, colorData, objects };
+                localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(saveData));
+                console.log("Autosaved state to localStorage");
+            } catch (e) {
+                console.error("Failed to save state to localStorage:", e);
+            }
+        }, 1000); // Save 1 second after the last change
+
+        return () => clearTimeout(saveTimeoutRef.current); // Cleanup timeout on unmount
+    }, [heightData, colorData, objects]); // Trigger effect when state changes
+
      // --- Imperative API ---
     useImperativeHandle(ref, () => ({
+        // TODO: Cleanup null objects
         save: () => ({ version: 5, heightData, colorData, objects }),
         load: (loadedData) => {
             if (!loadedData || typeof loadedData !== 'object') throw new Error("Invalid data");
@@ -195,6 +242,9 @@ const SceneWithLogic = forwardRef(({
             setObjects(processedObjects);
             const maxId = processedObjects.reduce((max, obj) => Math.max(max, obj.id || 0), 0);
             nextObjectId = maxId + 1;
+             // Trigger autosave after load
+             if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+             localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({ version: 5, heightData: loadedData.heightData, colorData: loadedData.colorData, objects: processedObjects }));
             return { newWidth: currentW, newHeight: currentH };
         },
         resizeGrid: (newWidth, newHeight) => {
@@ -212,6 +262,14 @@ const SceneWithLogic = forwardRef(({
              setObjects(prev => prev.filter(obj => obj.worldX >= minWorldX && obj.worldX < maxWorldX && obj.worldZ >= minWorldZ && obj.worldZ < maxWorldZ ));
              if (onInteractionEnd) onInteractionEnd(); // Notify parent
         },
+        resetState: () => {
+            console.log("Resetting scene state via imperative call");
+            const defaultState = generateDefaultState(); // Regenerate defaults
+            setHeightData(defaultState.heightData);
+            setColorData(defaultState.colorData);
+            setObjects(defaultState.objects);
+            // Autosave will trigger due to state change
+        },
         addObject: (newObjectData) => {
             const defaults = {}; const schema = ObjectEditorSchemas[newObjectData.type];
             if (schema) { schema.forEach(propInfo => { defaults[propInfo.name] = propInfo.defaultValue ?? (propInfo.type === 'color' ? '#CCCCCC' : (propInfo.min ?? 0.5)); }); }
@@ -219,9 +277,16 @@ const SceneWithLogic = forwardRef(({
             setObjects(prev => [...prev, fullData]);
         },
         removeObject: (id) => { setObjects(prev => prev.filter(obj => obj.id !== id)); },
-        updateObjectPositionWorld: (id, newWorldX, newWorldZ) => { setObjects(prev => prev.map(obj => obj.id === id ? { ...obj, worldX: newWorldX, worldZ: newWorldZ } : obj )); },
-        getObjectProperties: (id) => { const obj = objects.find(o => o.id === id); return obj ? { ...obj } : null; },
-        updateObjectProperty: (id, propName, value) => { setObjects(prev => prev.map(obj => obj.id === id ? { ...obj, [propName]: value } : obj )); },
+        updateObjectPositionWorld: (id, newWorldX, newWorldZ) => {
+            setObjects(prev => prev.map(obj => (obj && (obj.id === id)) ? { ...obj, worldX: newWorldX, worldZ: newWorldZ } : obj ));
+        },
+        getObjectProperties: (id) => {
+            const obj = objects.find(o => o != null && o.id === id);
+            return obj ? { ...obj } : null;
+        },
+        updateObjectProperty: (id, propName, value) => {
+            setObjects(prev => prev.map(obj => (obj && (obj.id === id)) ? { ...obj, [propName]: value } : obj ));
+        },
         getGroundHeightAtWorld: getGroundHeightAtWorld,
         getGridDimensions: () => ({ gridWidth, gridHeight }),
         applyTerrainBrush: applyTerrainBrush,
@@ -237,11 +302,13 @@ const SceneWithLogic = forwardRef(({
     const renderedObjects = useMemo(() => {
          if (gridWidth === 0 || gridHeight === 0) return [];
          return objects.map(obj => {
+            if (!obj)
+                return null;
             const ObjectComponent = ObjectComponents[obj.type]; if (!ObjectComponent) return null;
             const groundHeight = getGroundHeightAtWorld(obj.worldX, obj.worldZ); const worldYBase = getWorldYBase(groundHeight); const position = [obj.worldX, worldYBase, obj.worldZ];
             return ( <ObjectComponent key={obj.id} objectId={obj.id} position={position} isSelected={obj.id === selectedObjectId} onSelect={() => onObjectSelect(obj.id)} onPointerDown={onObjectPointerDown} globalAge={globalAge} {...obj} /> );
         })
-    }, [objects, selectedObjectId, globalAge, onObjectSelect, onObjectPointerDown, getGroundHeightAtWorld]);
+    }, [objects, selectedObjectId, globalAge, onObjectSelect, onObjectPointerDown, getGroundHeightAtWorld, gridWidth, gridHeight]);
 
      // --- Base Scene Elements ---
     const groundPlaneSize = useMemo(() => [gridWidth * CELL_SIZE + 4, gridHeight * CELL_SIZE + 4], [gridWidth, gridHeight]);
@@ -498,6 +565,13 @@ export default function PlanEditor() {
         sceneLogicRef.current?.updateObjectProperty(selectedObjectId, propName, parsedValue); setSelectedObjectProps(prevProps => ({ ...prevProps, [propName]: parsedValue }));
     };
 
+    const handleReset = () => {
+        if (window.confirm("Are you sure you want to reset the scene? This cannot be undone.")) {
+            localStorage.removeItem(LOCAL_STORAGE_KEY); // Clear saved state
+            sceneLogicRef.current?.resetState(); // Trigger reset in SceneLogic
+            handleInteractionEnd(); // Reset UI mode/selection
+        }
+    };
 
     // --- Keyboard Shortcuts Handler ---
     const handleKeyDown = useCallback((event) => {
@@ -623,6 +697,8 @@ export default function PlanEditor() {
                      <button style={getButtonStyle('add-shrub')} onClick={() => handleSetMode('add-shrub')}>Add Shrub</button>
                      <button style={getButtonStyle('add-grass')} onClick={() => handleSetMode('add-grass')}>Add Grass</button>
                  </div>
+                <strong>Actions:</strong><br/> <button onClick={onLoadClick} style={getButtonStyle('load')}>Load</button> <button onClick={onSaveClick} style={getButtonStyle('save')}>Save</button>
+                <button onClick={handleReset} style={getButtonStyle('reset')}>Reset</button> <button onClick={handleRemoveSelected} disabled={selectedObjectId === null} style={getButtonStyle('remove', selectedObjectId === null)}>Remove</button>
                  {/* ... Actions, Grid Resize, Brush Size (only relevant in terrain mode?), Aging Slider ... */}
                  <div style={{ marginBottom: '8px', borderTop: '1px solid #555', paddingTop: '8px', display: currentMode === 'terrain' ? 'block' : 'none' }}>
                     <strong>Brush Size:</strong> {brushSize}<br/> <input type="range" min="1" max="10" step="1" value={brushSize} onChange={(e) => setBrushSize(parseInt(e.target.value, 10))} style={{ width: '100%' }}/>
