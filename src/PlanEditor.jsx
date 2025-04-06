@@ -1,7 +1,7 @@
 // src/PlanEditor.jsx
 import React, { useState, useMemo, useCallback, useRef, forwardRef, useImperativeHandle, useEffect } from 'react';
 import { Canvas, useThree, useFrame } from '@react-three/fiber';
-import { OrbitControls, PerspectiveCamera, Box, Plane } from '@react-three/drei';
+import { OrbitControls, PerspectiveCamera, Box, Plane, Text } from '@react-three/drei';
 import * as THREE from 'three';
 
 // Import object components AND their editor schemas
@@ -80,7 +80,8 @@ const GridCell = React.memo(({ x, z, height, color, onPointerDown, gridWidth, gr
 // --- Scene Component (Manages Data State and 3D Primitives) ---
 const SceneWithLogic = forwardRef(({
     selectedObjectId, globalAge, brushSize, // Props
-    onObjectSelect, onObjectPointerDown, onGridPointerDown, onInteractionEnd // Callbacks
+    onObjectSelect, onObjectPointerDown, onGridPointerDown, onInteractionEnd,
+    showCoordinates
 }, ref) => {
     // --- State ---
     const [heightData, setHeightData] = useState(() => getInitialHeightData(INITIAL_GRID_WIDTH, INITIAL_GRID_HEIGHT));
@@ -310,6 +311,42 @@ const SceneWithLogic = forwardRef(({
         })
     }, [objects, selectedObjectId, globalAge, onObjectSelect, onObjectPointerDown, getGroundHeightAtWorld, gridWidth, gridHeight]);
 
+    // --- Coordinate Labels ---
+    const coordinateLabels = useMemo(() => {
+        if (!showCoordinates || gridWidth === 0 || gridHeight === 0) {
+            return null;
+        }
+
+        const labels = [];
+        const labelColor = "#cccccc";
+        const labelSize = 0.5;
+        const labelOffset = 1; // How far outside the grid to place labels
+        const groundY = 0.3; // Slightly above the base plane
+
+        // X-axis labels (along negative Z edge)
+        const zPos = (-gridHeight / 2 - labelOffset) * CELL_SIZE;
+        for (let x = 0; x < gridWidth; x++) {
+            const xPos = (x - gridWidth / 2 + 0.5) * CELL_SIZE;
+            labels.push(
+                <Text key={`coord-x-${x}`} position={[xPos, groundY, zPos]} fontSize={labelSize} color={labelColor} anchorX="center" anchorY="middle" rotation={[-Math.PI / 2, 0, 0]}>
+                    {x}
+                </Text>
+            );
+        }
+
+        // Z-axis labels (along negative X edge)
+        const xPos = (-gridWidth / 2 - labelOffset) * CELL_SIZE;
+        for (let z = 0; z < gridHeight; z++) {
+            const zPos = (z - gridHeight / 2 + 0.5) * CELL_SIZE;
+            labels.push(
+                <Text key={`coord-z-${z}`} position={[xPos, groundY, zPos]} fontSize={labelSize} color={labelColor} anchorX="center" anchorY="middle" rotation={[-Math.PI / 2, 0, 0]}>
+                    {z}
+                </Text>
+            );
+        }
+        return labels;
+    }, [showCoordinates, gridWidth, gridHeight]); // Depend on toggle state and dimensions
+
      // --- Base Scene Elements ---
     const groundPlaneSize = useMemo(() => [gridWidth * CELL_SIZE + 4, gridHeight * CELL_SIZE + 4], [gridWidth, gridHeight]);
     const avgHeight = useMemo(() => { if (gridWidth === 0 || gridHeight === 0) return 0; let t = 0; let c = 0; for (let z = 0; z < gridHeight; z++) { for (let x = 0; x < gridWidth; x++) { t += heightData[z]?.[x] ?? 0; c++; } } return c > 0 ? t / c : 0; }, [heightData, gridWidth, gridHeight]);
@@ -320,6 +357,7 @@ const SceneWithLogic = forwardRef(({
             <directionalLight position={[gridWidth * 0.5, 15 + avgHeight, gridHeight * 0.5]} intensity={1.0} castShadow shadow-mapSize-width={1024} shadow-mapSize-height={1024} />
             <group>{gridCells}</group>
             <group>{renderedObjects}</group>
+            <group>{coordinateLabels}</group>
             <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.05, 0]} receiveShadow name="base-ground"> <planeGeometry args={groundPlaneSize} /> <meshStandardMaterial color="#444" side={THREE.DoubleSide} /> </mesh>
         </>
     );
@@ -332,7 +370,7 @@ function Experience({
     addModeObjectType, // Only used when currentMode is 'add-*'
     selectedObjectId, // Read-only, selection managed by PlanEditor via onSelectObject
     globalAge, brushSize, // Props for rendering/API
-    sceneLogicRef, onSelectObject, onInteractionEnd, getInitialObjectId // Refs/Callbacks
+    sceneLogicRef, onSelectObject, onInteractionEnd, getInitialObjectId, showCoordinates // Refs/Callbacks
 }) {
     const { raycaster, pointer, camera, gl } = useThree();
     const orbitControlsRef = useRef();
@@ -461,14 +499,14 @@ function Experience({
         };
     }, [draggingInfo, isPaintingTerrain, handlePointerMove, handlePointerUp, gl]);
 
-    // handlePointerMissed is now handled by the Canvas prop in PlanEditor
-
+     
+    console.log("[Experience] Received showCoordinates:", showCoordinates);
     return (
         <>
             <PerspectiveCamera makeDefault position={[15, 20, 25]} fov={60} />
             <SceneWithLogic
                 ref={sceneLogicRef} selectedObjectId={selectedObjectId} globalAge={globalAge} brushSize={brushSize}
-                onObjectSelect={onSelectObject} onObjectPointerDown={handleObjectPointerDown} onGridPointerDown={handleGridPointerDown}
+                onObjectSelect={onSelectObject} onObjectPointerDown={handleObjectPointerDown} onGridPointerDown={handleGridPointerDown} showCoordinates={showCoordinates}
                 onInteractionEnd={onInteractionEnd} // Pass down for Add/Resize
             />
             {draggingInfo && (<Plane ref={dragPlaneRef} args={[10000, 10000]} rotation={[-Math.PI / 2, 0, 0]} position={[0, draggingInfo.initialY, 0]} visible={false} />)}
@@ -493,6 +531,7 @@ export default function PlanEditor() {
     const [desiredWidth, setDesiredWidth] = useState(INITIAL_GRID_WIDTH);
     const [desiredHeight, setDesiredHeight] = useState(INITIAL_GRID_HEIGHT);
     const [currentGridSize, setCurrentGridSize] = useState({w: INITIAL_GRID_WIDTH, h: INITIAL_GRID_HEIGHT});
+    const [showCoordinates, setShowCoordinates] = useState(true);
     const [clipboard, setClipboard] = useState(null); // For copy-paste
 
     // Derive addModeObjectType from currentMode for passing down (though Experience checks currentMode directly now)
@@ -688,6 +727,7 @@ export default function PlanEditor() {
         <div style={{ height: '100vh', width: '100vw', display: 'flex', flexDirection: 'column', background: '#282c34' }}>
              {/* UI Overlay - Update Mode Buttons */}
              <div style={{ position: 'absolute', top: '10px', left: '10px', zIndex: 1, color: 'white', background: 'rgba(0,0,0,0.8)', padding: '10px', borderRadius: '5px', fontSize: '12px', width: '220px', maxHeight: 'calc(100vh - 20px)', overflowY: 'auto', boxSizing: 'border-box' }}>
+                 { /* console.log("[PlanEditor] Rendering with showCoordinates:", showCoordinates) */ }
                  <div style={{ marginBottom: '8px' }}>
                      <strong>Mode:</strong><br/>
                      {/* Explicit Mode Buttons */}
@@ -710,6 +750,12 @@ export default function PlanEditor() {
                         <button onClick={handleResize} style={getButtonStyle('resize')}>Resize</button>
                     </div>
                  </div>
+                 <div style={{ marginBottom: '8px', borderTop: '1px solid #555', paddingTop: '8px' }}>
+                     <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                         <input type="checkbox" checked={showCoordinates} onChange={(e) => setShowCoordinates(e.target.checked)} style={{ marginRight: '5px' }}/>
+                         Show Coordinates
+                     </label>
+                 </div>
                  {/* ... Property Editor (shown only if selectedObjectId is not null) ... */}
                  {selectedObjectId !== null && renderPropertyEditors()}
                  {/* ... Instructions ... */}
@@ -725,6 +771,7 @@ export default function PlanEditor() {
                          selectedObjectId={selectedObjectId} // Pass down selection
                          globalAge={globalAge} brushSize={brushSize} sceneLogicRef={sceneLogicRef}
                          onSelectObject={handleSelectObject} onInteractionEnd={handleInteractionEnd} getInitialObjectId={getNextObjectId}
+                         showCoordinates={showCoordinates}
                     />
                 </Canvas>
             </div>
