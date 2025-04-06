@@ -101,15 +101,16 @@ const SceneWithLogic = forwardRef(({
          ];
         nextObjectId = 5; // Reset counter
 
+        const hData = defaultHeightData;
         const defaultObjects = initialGridObjects.map(obj => {
-            // Add defaults based on schema for initial objects
-            const defaults = {};
-            const schema = ObjectEditorSchemas[obj.type];
-            if (schema) {
-                schema.forEach(propInfo => {
-                    defaults[propInfo.name] = propInfo.defaultValue ?? (propInfo.type === 'color' ? '#CCCCCC' : (propInfo.min ?? 0.5))
-                });
-            }});
+            const defaults = {}; const schema = ObjectEditorSchemas[obj.type];
+            if (schema) { schema.forEach(propInfo => { defaults[propInfo.name] = propInfo.defaultValue; }); }
+             const groundHeight = hData[obj.gridZ]?.[obj.gridX] ?? 0;
+             const [worldX, , worldZ] = gridToWorldCenter(obj.gridX, obj.gridZ, groundHeight, INITIAL_GRID_WIDTH, INITIAL_GRID_HEIGHT);
+             const { gridX, gridZ, ...rest } = obj;
+             return { ...defaults, worldX, worldZ, ...rest };
+        });
+
         return { heightData: defaultHeightData, colorData: defaultColorData, objects: defaultObjects };
     };
 
@@ -118,6 +119,7 @@ const SceneWithLogic = forwardRef(({
         if (savedData) {
             try {
                 const parsed = JSON.parse(savedData);
+                console.log(parsed);
                 // Basic validation - could be more thorough
                 if (parsed && parsed.heightData && parsed.colorData && parsed.objects && parsed.version === 5) {
                     console.log("Loaded state from localStorage");
@@ -141,6 +143,7 @@ const SceneWithLogic = forwardRef(({
     const gridHeight = useMemo(() => heightData.length, [heightData]);
     const gridWidth = useMemo(() => (heightData[0] ? heightData[0].length : 0), [heightData]);
     function getInitialHeightData(width, height) {
+        console.log((new Error()).stack);
         const data = []; for (let z = 0; z < height; z++) { data[z] = []; for (let x = 0; x < width; x++) { data[z][x] = getInitialHeight(x, z, width, height); } } return data;
     }
     function getInitialColorData(hData) {
@@ -219,6 +222,7 @@ const SceneWithLogic = forwardRef(({
                 const saveData = { version: 5, heightData, colorData, objects };
                 localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(saveData));
                 console.log("Autosaved state to localStorage");
+                console.log(saveData);
             } catch (e) {
                 console.error("Failed to save state to localStorage:", e);
             }
