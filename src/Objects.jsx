@@ -119,68 +119,76 @@ Shrub.editorSchema = [
 const MAX_GRASS_BLADES = 100; // Performance limit
 
 export const Grass = React.memo(({ position, isSelected, onSelect, onPointerDown, objectId, globalAge = 1,
-    // New parameters with defaults
-    baseDiameter = 0.5, // Overall width of the grass patch
-    length = 0.3,       // Max length of blades (center)
-    bottomColor = "#224411", // Darker green base
-    topColor = "#66AA44",   // Lighter green tip
-    colorRatio = 0.5,   // 0 = mostly bottom, 1 = mostly top
-    density = 50,       // Arbitrary density factor (adjust multiplier below)
-    straightness = 0.7  // 0 = flat outwards, 1 = straight up
+    // Parameters with defaults
+    baseDiameter = 0.5,
+    length = 0.3,
+    bottomColor = "#224411",
+    topColor = "#66AA44",
+    colorRatio = 0.5,
+    density = 50,
+    straightness = 0.7
  }) => {
 
     const instancedMeshRef = useRef();
-    const baseBladeWidth = 0.02; // Width of a single blade box
+    const baseBladeWidth = 0.025; // Width of a single blade plane
 
     // Memoize geometry and material
     const [geometry, material] = useMemo(() => {
-        // Simple box geometry for a single blade
-        const geom = new THREE.BoxGeometry(baseBladeWidth, 1, baseBladeWidth); // Height is 1 initially, scaled later
-        geom.applyMatrix4(new THREE.Matrix4().makeTranslation(0, 0.5, 0)); // Pivot at bottom center
-        // Material that uses vertex colors
+        // Use PlaneGeometry for a single blade (width, height)
+        const geom = new THREE.PlaneGeometry(baseBladeWidth, 1, 1, 1); // Height is 1 initially, scaled later
+        // Translate geometry so the pivot (origin) is at the bottom center
+        geom.translate(0, 0.5, 0);
+
+        // Ensure geometry has vertex colors attribute
+        if (!geom.attributes.color) {
+            const vertexCount = geom.attributes.position.count;
+            geom.setAttribute('color', new THREE.BufferAttribute(new Float32Array(vertexCount * 3), 3));
+        }
+
+        // Material that uses vertex colors and is double-sided
         const mat = new THREE.MeshStandardMaterial({
             vertexColors: true,
-            roughness: 0.7,
-            metalness: 0.1,
-            side: THREE.DoubleSide // Render both sides
+            roughness: 0.8, // More matte appearance for grass
+            metalness: 0.05,
+            side: THREE.DoubleSide, // Render both sides of the plane
+            shadowSide: THREE.DoubleSide // Allow shadows on both sides if needed
         });
         return [geom, mat];
-    }, []);
+    }, []); // Recreate only if baseBladeWidth changes (which it doesn't here)
 
     // Calculate instance count based on density
     const count = useMemo(() => {
         const area = Math.PI * (baseDiameter / 2) ** 2;
-        // Adjust the multiplier '150' based on desired visual density
-        return Math.min(MAX_GRASS_BLADES, Math.max(1, Math.floor(density * area * 150)));
+        return Math.min(MAX_GRASS_BLADES, Math.max(1, Math.floor(density * area * 150))); // Adjust multiplier for visual density
     }, [density, baseDiameter]);
 
     // Effect to update vertex colors when color props change
     useEffect(() => {
-        if (!geometry) return;
-
-        const colorAttrib = geometry.attributes.position.clone(); // Use position attribute structure
-        geometry.setAttribute('color', colorAttrib); // Add color attribute if not present
+        if (!geometry || !geometry.attributes.color) return;
 
         const colors = geometry.attributes.color.array;
         const positions = geometry.attributes.position.array;
         const bColor = tempColor.set(bottomColor);
         const tColor = tempColor.set(topColor);
         const finalColor = new THREE.Color();
+        const vertexCount = geometry.attributes.position.count;
 
-        for (let i = 0; i < positions.length; i += 3) {
-            // Y position is at index i+1, normalized (0 to 1 because base geometry height is 1)
-            const normalizedY = positions[i + 1];
-            // Lerp color based on normalized height and colorRatio
-            // Adjust lerp factor: 0 means use bottomColor, 1 means use topColor
-            const lerpFactor = Math.pow(normalizedY, 1.0 / (Math.max(0.1, colorRatio))); // Exponential interpolation based on ratio
+        for (let i = 0; i < vertexCount; i++) {
+            const yPosIndex = i * 3 + 1; // Index for the Y coordinate
+            // Normalized Y position (0 at bottom, 1 at top because base geometry height is 1)
+            const normalizedY = positions[yPosIndex];
+
+            // Adjust lerp factor based on colorRatio (power makes transition sharper/softer)
+            const lerpFactor = Math.pow(normalizedY, 1.0 / (Math.max(0.1, colorRatio)));
             finalColor.lerpColors(bColor, tColor, lerpFactor);
 
-            colors[i] = finalColor.r;
-            colors[i + 1] = finalColor.g;
-            colors[i + 2] = finalColor.b;
+            const colorIndex = i * 3;
+            colors[colorIndex] = finalColor.r;
+            colors[colorIndex + 1] = finalColor.g;
+            colors[colorIndex + 2] = finalColor.b;
         }
         geometry.attributes.color.needsUpdate = true;
-        console.log("Updated grass vertex colors");
+        // console.log("Updated grass vertex colors");
 
     }, [geometry, bottomColor, topColor, colorRatio]);
 
@@ -191,53 +199,55 @@ export const Grass = React.memo(({ position, isSelected, onSelect, onPointerDown
 
         const mesh = instancedMeshRef.current;
         const maxRadius = baseDiameter / 2;
-        const currentMaxLength = lerp(0.01, length, globalAge); // Apply aging to max length
+        const currentMaxLength = lerp(0.01, length, globalAge);
 
         for (let i = 0; i < count; i++) {
             // --- Position ---
-            const radius = Math.sqrt(Math.random()) * maxRadius; // Distribute within circle area
+            const radius = Math.sqrt(Math.random()) * maxRadius;
             const angle = Math.random() * Math.PI * 2;
             const x = Math.cos(angle) * radius;
             const z = Math.sin(angle) * radius;
-            tempObject.position.set(x, 0, z); // Position relative to the group center
+            tempObject.position.set(x, 0, z);
 
-            // --- Rotation ---
-            const randomYRotation = Math.random() * Math.PI * 0.5 - Math.PI * 0.25; // Slight random twist
-            // Calculate tilt based on straightness and distance from center
-            const radialRatio = maxRadius > 0.01 ? radius / maxRadius : 0; // Avoid division by zero
-            const maxTilt = Math.PI / 2 * (1 - straightness); // 0 tilt if straightness=1, PI/2 if straightness=0
+            // --- Rotation (Outward Tilt + Random Y) ---
+            const randomYRotation = Math.random() * Math.PI * 0.3 - Math.PI * 0.15; // Smaller random twist
+            const radialRatio = maxRadius > 0.01 ? radius / maxRadius : 0;
+            const maxTilt = Math.PI / 2 * (1 - straightness); // 0 tilt if straightness=1, PI/2 if 0
             const tiltAngle = maxTilt * radialRatio; // Linear interpolation of tilt
 
-            // Calculate tilt axis (perpendicular to the direction from center)
-            const tiltAxis = new THREE.Vector3(-z, 0, x).normalize(); // Axis is perpendicular to (x,0,z) vector
+            // Axis of tilt is perpendicular to the direction from center (same as before)
+            const tiltAxis = tempObject.position.clone().cross(tempObject.up).normalize();
+             // Handle case where position is exactly at origin (though unlikely with sqrt(random))
+             if (tiltAxis.lengthSq() < 0.001) {
+                 tiltAxis.set(1, 0, 0); // Default tilt axis if at center
+             }
 
-            // Combine random Y rotation and tilt
-            const quaternionY = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), randomYRotation);
-            const quaternionTilt = new THREE.Quaternion().setFromAxisAngle(tiltAxis, tiltAngle);
-            tempObject.quaternion.multiplyQuaternions(quaternionY, quaternionTilt); // Apply tilt first, then random Y? Or vice versa? Let's try Y first.
-            // tempObject.quaternion.multiplyQuaternions(quaternionTilt, quaternionY); // Apply random Y first
+            // Combine rotations: First apply random Y rotation, then tilt outwards
+            const quaternionY = new THREE.Quaternion().setFromAxisAngle(tempObject.up, randomYRotation);
+            const quaternionTilt = new THREE.Quaternion().setFromAxisAngle(tiltAxis, -tiltAngle);
+            tempObject.quaternion.multiplyQuaternions(quaternionTilt, quaternionY); // Apply Y first, then tilt
 
             // --- Scale ---
-            const lengthFalloff = lerp(1.0, 0.75, radialRatio); // Outer blades are shorter
-            const finalLength = currentMaxLength * lengthFalloff;
-            tempObject.scale.set(1, finalLength, 1); // Scale only Y based on calculated length (base geometry height is 1)
+            const lengthFalloff = lerp(1.0, 0.75, radialRatio); // Outer blades are 75% length
+            const finalLength = Math.max(0.01, currentMaxLength * lengthFalloff); // Ensure non-zero length
+            tempObject.scale.set(1, finalLength, 1); // Scale only Y
 
             // --- Update Matrix ---
             tempObject.updateMatrix();
             mesh.setMatrixAt(i, tempObject.matrix);
         }
         mesh.instanceMatrix.needsUpdate = true;
-        mesh.computeBoundingSphere(); // Update bounds after transforms change
+        mesh.computeBoundingSphere();
 
-    }, [count, baseDiameter, length, straightness, globalAge, geometry]); // Dependencies that affect transforms
+    }, [count, baseDiameter, length, straightness, globalAge, geometry]); // Dependencies
 
 
     return (
          <ObjectBase position={position} isSelected={isSelected} onSelect={onSelect} onPointerDown={onPointerDown} objectId={objectId} type="grass">
             <instancedMesh
                 ref={instancedMeshRef}
-                args={[geometry, material, count]} // Use memoized geom/mat
-                castShadow // Blades can cast shadows
+                args={[geometry, material, count]}
+                castShadow
                 receiveShadow
             />
         </ObjectBase>
