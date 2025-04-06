@@ -81,7 +81,7 @@ const GridCell = React.memo(({ x, z, height, color, onPointerDown, gridWidth, gr
 const SceneWithLogic = forwardRef(({
     selectedObjectId, globalAge, brushSize, // Props
     onObjectSelect, onObjectPointerDown, onGridPointerDown, onInteractionEnd,
-    showCoordinates, sunAzimuth, sunElevation
+    showCoordinates, sunAzimuth, sunElevation, terrainPaintMode, absolutePaintHeight
 }, ref) => {
     // --- State ---
     const [heightData, setHeightData] = useState(() => getInitialHeightData(INITIAL_GRID_WIDTH, INITIAL_GRID_HEIGHT));
@@ -163,7 +163,8 @@ const SceneWithLogic = forwardRef(({
     }
 
     // --- Terrain & Height Lookup ---
-    const applyTerrainBrush = useCallback((centerX, centerZ, deltaHeight) => {
+    const applyTerrainBrush = useCallback((centerX, centerZ, deltaHeight, mode = 'relative', targetHeight = 0) => {
+        if (gridWidth === 0 || gridHeight === 0) return; // Exit if grid is empty
          setHeightData(prevData => {
             const newData = prevData.map(row => [...row]);
             const radius = brushSize - 1;
@@ -173,6 +174,9 @@ const SceneWithLogic = forwardRef(({
             const startZ = Math.max(0, Math.floor(centerZ - radius));
             const endZ = Math.min(gridHeight - 1, Math.ceil(centerZ + radius));
 
+            // For absolute mode, determine the height difference at the center needed
+            let centerDelta = deltaHeight; // Default for relative mode
+
             for (let z = startZ; z <= endZ; z++) {
                 for (let x = startX; x <= endX; x++) {
                     const distX = x - centerX; const distZ = z - centerZ; const distSq = distX * distX + distZ * distZ;
@@ -180,7 +184,16 @@ const SceneWithLogic = forwardRef(({
                          let intensity = 0;
                          if (radius > 0.1) { const dist = Math.sqrt(distSq); const ratio = Math.min(1.0, dist / radius); intensity = Math.pow(Math.cos(ratio * Math.PI * 0.5), 2); } // Squared Cosine falloff
                          else { intensity = (distSq < 0.1) ? 1.0 : 0.0; }
-                         const currentHeight = newData[z][x]; const modifiedHeight = currentHeight + deltaHeight * intensity;
+
+                         const currentHeight = newData[z]?.[x] ?? 0; // Ensure currentHeight exists
+                         let modifiedHeight;
+
+                         if (mode === 'absolute') {
+                             modifiedHeight = targetHeight;
+                         } else { // Relative mode
+                             modifiedHeight = currentHeight + deltaHeight * intensity;
+                         }
+
                          newData[z][x] = Math.max(0, modifiedHeight);
                     }
                 }
@@ -409,7 +422,8 @@ function Experience({
     selectedObjectToAdd, // NEW: Pass the selected configuration to add
     selectedObjectId, // Read-only, selection managed by PlanEditor via onSelectObject
     globalAge, brushSize, // Props for rendering/API
-    sceneLogicRef, onSelectObject, onInteractionEnd, getInitialObjectId, showCoordinates, paintColor, sunAzimuth, sunElevation // Refs/Callbacks
+    sceneLogicRef, onSelectObject, onInteractionEnd, getInitialObjectId, showCoordinates, paintColor, sunAzimuth, sunElevation,
+    terrainPaintMode, absolutePaintHeight
 }) {
     const { raycaster, pointer, camera, gl } = useThree();
     const orbitControlsRef = useRef();
@@ -469,7 +483,13 @@ function Experience({
             setIsPaintingTerrain(true);
             const dir = event.shiftKey ? -1 : 1;
             setPaintDirection(dir);
-            sceneLogicRef.current.applyTerrainBrush(gridX, gridZ, HEIGHT_MODIFIER * dir); // Use grid coords for brush center
+
+            // Call applyTerrainBrush with mode and target height
+            sceneLogicRef.current.applyTerrainBrush(
+                gridX, gridZ,
+                HEIGHT_MODIFIER * dir, // deltaHeight (used in relative mode)
+                terrainPaintMode, absolutePaintHeight // Pass mode and target
+            );
             event.target?.setPointerCapture(event.pointerId);
             if (orbitControlsRef.current) orbitControlsRef.current.enabled = false;
             console.log("Paint Start");
@@ -486,7 +506,7 @@ function Experience({
             if (orbitControlsRef.current) orbitControlsRef.current.enabled = false;
         }
 
-    }, [currentMode, selectedObjectToAdd, draggingInfo, brushSize, sceneLogicRef, onInteractionEnd, onSelectObject, getInitialObjectId, raycaster, pointer, camera, gl, paintColor]); // Added currentMode
+    }, [currentMode, selectedObjectToAdd, draggingInfo, brushSize, sceneLogicRef, onInteractionEnd, onSelectObject, getInitialObjectId, raycaster, pointer, camera, gl, paintColor, terrainPaintMode, absolutePaintHeight]); // Added currentMode
 
     const handlePointerMove = useCallback((event) => {
         pointerRef.current.x = (event.clientX / window.innerWidth) * 2 - 1;
@@ -510,7 +530,14 @@ function Experience({
             const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0); const intersectionPoint = new THREE.Vector3();
             if (raycaster.ray.intersectPlane(groundPlane, intersectionPoint)) {
                  const gridX = Math.floor(intersectionPoint.x / CELL_SIZE + gridWidth / 2); const gridZ = Math.floor(intersectionPoint.z / CELL_SIZE + gridHeight / 2);
-                 if (gridX >= 0 && gridX < gridWidth && gridZ >= 0 && gridZ < gridHeight) { sceneLogicRef.current.applyTerrainBrush(gridX, gridZ, HEIGHT_MODIFIER * paintDirection); }
+                 if (gridX >= 0 && gridX < gridWidth && gridZ >= 0 && gridZ < gridHeight) {
+                     // Call applyTerrainBrush with mode and target height
+                     sceneLogicRef.current.applyTerrainBrush(
+                         gridX, gridZ,
+                         HEIGHT_MODIFIER * paintDirection, // deltaHeight (used in relative mode)
+                         terrainPaintMode, absolutePaintHeight // Pass mode and target
+                     );
+                }
             }
         } else if (isPaintingColor) { // Painting color
             const { gridWidth, gridHeight } = sceneLogicRef.current.getGridDimensions();
@@ -520,7 +547,7 @@ function Experience({
                  if (gridX >= 0 && gridX < gridWidth && gridZ >= 0 && gridZ < gridHeight) { sceneLogicRef.current.updateCellColor(gridX, gridZ, paintColor); } // Paint cell under pointer
             }
         }
-    }, [draggingInfo, isPaintingTerrain, isPaintingColor, paintDirection, raycaster, camera, sceneLogicRef, paintColor]);
+    }, [draggingInfo, isPaintingTerrain, isPaintingColor, paintDirection, raycaster, camera, sceneLogicRef, paintColor, terrainPaintMode, absolutePaintHeight]);
 
     const handlePointerUp = useCallback((event) => {
         const pointerId = event.pointerId;
@@ -571,6 +598,7 @@ function Experience({
                 ref={sceneLogicRef} selectedObjectId={selectedObjectId} globalAge={globalAge} brushSize={brushSize}
                 onObjectSelect={onSelectObject} onObjectPointerDown={handleObjectPointerDown} onGridPointerDown={handleGridPointerDown} showCoordinates={showCoordinates}
                 onInteractionEnd={onInteractionEnd} sunAzimuth={sunAzimuth} sunElevation={sunElevation} // Pass down for Add/Resize
+                terrainPaintMode={terrainPaintMode} absolutePaintHeight={absolutePaintHeight}
             />
             {draggingInfo && (<Plane ref={dragPlaneRef} args={[10000, 10000]} rotation={[-Math.PI / 2, 0, 0]} position={[0, draggingInfo.initialY, 0]} visible={false} />)}
             {/* Disable controls only when actually dragging or painting */}
@@ -594,6 +622,8 @@ export default function PlanEditor() {
     const [desiredWidth, setDesiredWidth] = useState(INITIAL_GRID_WIDTH);
     const [desiredHeight, setDesiredHeight] = useState(INITIAL_GRID_HEIGHT);
     const [currentGridSize, setCurrentGridSize] = useState({w: INITIAL_GRID_WIDTH, h: INITIAL_GRID_HEIGHT});
+    const [terrainPaintMode, setTerrainPaintMode] = useState('relative'); // 'relative' or 'absolute'
+    const [absolutePaintHeight, setAbsolutePaintHeight] = useState(1.0); // Target height for absolute mode
     const [paintColor, setPaintColor] = useState(COLORS[1]); // Default paint color
     const [showCoordinates, setShowCoordinates] = useState(true);
     const [clipboard, setClipboard] = useState(null); // For copy-paste
@@ -900,7 +930,15 @@ export default function PlanEditor() {
                  </div>
                  {/* ... Actions, Grid Resize, Brush Size (only relevant in terrain mode?), Aging Slider ... */}
                  <div style={{ marginBottom: '8px', borderTop: '1px solid #555', paddingTop: '8px', display: currentMode === 'terrain' ? 'block' : 'none' }}>
-                    <strong>Brush Size:</strong> {brushSize}<br/> <input type="range" min="1" max="10" step="1" value={brushSize} onChange={(e) => setBrushSize(parseInt(e.target.value, 10))} style={{ width: '100%' }}/>
+                    <strong>Terrain Brush:</strong>
+                    <div><label>Size:</label> {brushSize}<br/> <input type="range" min="1" max="10" step="1" value={brushSize} onChange={(e) => setBrushSize(parseInt(e.target.value, 10))} style={{ width: '100%' }}/></div>
+                    <div style={{marginTop: '5px'}}>
+                        <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                             <input type="checkbox" checked={terrainPaintMode === 'absolute'} onChange={(e) => setTerrainPaintMode(e.target.checked ? 'absolute' : 'relative')} style={{ marginRight: '5px' }}/>
+                             Set Absolute Height:
+                        </label>
+                        <input type="number" step="0.1" value={absolutePaintHeight} onChange={(e) => setAbsolutePaintHeight(parseFloat(e.target.value) || 0)} disabled={terrainPaintMode !== 'absolute'} style={{ width: '50px', marginLeft: '5px', opacity: terrainPaintMode === 'absolute' ? 1 : 0.5 }}/>
+                    </div>
                     <div style={{ marginBottom: '8px', borderTop: '1px solid #555', paddingTop: '8px' }}>
                         <strong>Grid ({currentGridSize.w} x {currentGridSize.h}):</strong><br/>
                         <input type="number" value={desiredWidth} onChange={(e) => setDesiredWidth(e.target.value)} min={MIN_GRID_DIM} max={MAX_GRID_DIM} style={{ width: '40px', marginRight: '3px' }}/>
@@ -984,6 +1022,7 @@ export default function PlanEditor() {
                          paintColor={paintColor}
                          sunAzimuth={sunAzimuth} // Pass down sun state
                          sunElevation={sunElevation} // Pass down sun state
+                         terrainPaintMode={terrainPaintMode} absolutePaintHeight={absolutePaintHeight} 
                     />
                 </Canvas>
             </div>
