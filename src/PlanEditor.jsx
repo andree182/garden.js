@@ -174,24 +174,20 @@ const SceneWithLogic = forwardRef(({
             const startZ = Math.max(0, Math.floor(centerZ - radius));
             const endZ = Math.min(gridHeight - 1, Math.ceil(centerZ + radius));
 
-            // For absolute mode, determine the height difference at the center needed
-            let centerDelta = deltaHeight; // Default for relative mode
-
             for (let z = startZ; z <= endZ; z++) {
                 for (let x = startX; x <= endX; x++) {
                     const distX = x - centerX; const distZ = z - centerZ; const distSq = distX * distX + distZ * distZ;
                     if (distSq <= (radius + 0.5) * (radius + 0.5)) {
-                         let intensity = 0;
-                         if (radius > 0.1) { const dist = Math.sqrt(distSq); const ratio = Math.min(1.0, dist / radius); intensity = Math.pow(Math.cos(ratio * Math.PI * 0.5), 2); } // Squared Cosine falloff
-                         else { intensity = (distSq < 0.1) ? 1.0 : 0.0; }
-
-                         const currentHeight = newData[z]?.[x] ?? 0; // Ensure currentHeight exists
                          let modifiedHeight;
-
                          if (mode === 'absolute') {
                              modifiedHeight = targetHeight;
                          } else { // Relative mode
-                             modifiedHeight = currentHeight + deltaHeight * intensity;
+                            let intensity = 0;
+                            if (radius > 0.1) { const dist = Math.sqrt(distSq); const ratio = Math.min(1.0, dist / radius); intensity = Math.pow(Math.cos(ratio * Math.PI * 0.5), 2); } // Squared Cosine falloff
+                            else { intensity = (distSq < 0.1) ? 1.0 : 0.0; }
+
+                            const currentHeight = newData[z]?.[x] ?? 0; // Ensure currentHeight exists
+                            modifiedHeight = currentHeight + deltaHeight * intensity;
                          }
 
                          newData[z][x] = Math.max(0, modifiedHeight);
