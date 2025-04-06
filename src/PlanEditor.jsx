@@ -15,7 +15,7 @@ const INITIAL_GRID_WIDTH = 20;
 const INITIAL_GRID_HEIGHT = 20;
 const MIN_GRID_DIM = 5;
 const MAX_GRID_DIM = 100;
-const COLORS = ['#8BC34A', '#CDDC39', '#FFEB3B', '#FFC107', '#FF9800', '#795548', '#48b5d0', '#bbbbbb']; // Terrain Colors
+const COLORS = ['#48b5d0', '#bbbbbb', '#8BC34A', '#CDDC39', '#FFEB3B', '#FFC107', '#FF9800', '#795548']; // Terrain Colors
 const DRAG_PLANE_OFFSET = 0.1; // Place drag plane slightly above ground
 const DRAG_THRESHOLD = 5; // Minimum pixels pointer must move to initiate a drag
 const LOCAL_STORAGE_KEY = 'planEditorSaveData_v5'; // Key for localStorage, update if format changes significantly
@@ -144,8 +144,22 @@ const SceneWithLogic = forwardRef(({
         const data = []; for (let z = 0; z < height; z++) { data[z] = []; for (let x = 0; x < width; x++) { data[z][x] = getInitialHeight(x, z, width, height); } } return data;
     }
     function getInitialColorData(hData) {
-        const data = []; const height = hData.length; if (height === 0) return []; const width = hData[0].length;
-        for (let z = 0; z < height; z++) { data[z] = []; for (let x = 0; x < width; x++) { const h = hData[z]?.[x] ?? 0; const hr = h / INITIAL_MAX_HEIGHT; const ci = Math.min(COLORS.length - 1, Math.max(0, Math.floor(hr * (COLORS.length - 2)) + 1)); data[z][x] = h < 0.05 ? COLORS[0] : COLORS[ci]; } } return data;
+        const data = [];
+        const height = hData.length;
+        if (height === 0)
+            return [];
+        const width = hData[0].length;
+
+        for (let z = 0; z < height; z++) {
+            data[z] = [];
+            for (let x = 0; x < width; x++) {
+                const h = hData[z]?.[x] ?? 0;
+                const hr = h / INITIAL_MAX_HEIGHT;
+                const ci = Math.min(COLORS.length - 1, Math.max(0, Math.floor(hr * (COLORS.length - 2)) + 1));
+                data[z][x] = h < 0.05 ? COLORS[0] : COLORS[ci];
+            }
+        }
+        return data;
     }
 
     // --- Terrain & Height Lookup ---
@@ -262,6 +276,7 @@ const SceneWithLogic = forwardRef(({
              }
              setHeightData(newHData); setColorData(newCData);
              const minWorldX = -newWidth / 2 * CELL_SIZE; const maxWorldX = newWidth / 2 * CELL_SIZE; const minWorldZ = -newHeight / 2 * CELL_SIZE; const maxWorldZ = newHeight / 2 * CELL_SIZE;
+             prev = sanitizeObjectsArray(prev);
              setObjects(prev => prev.filter(obj => obj.worldX >= minWorldX && obj.worldX < maxWorldX && obj.worldZ >= minWorldZ && obj.worldZ < maxWorldZ ));
              if (onInteractionEnd) onInteractionEnd(); // Notify parent
         },
@@ -415,20 +430,24 @@ function Experience({
         if (draggingInfo || !sceneLogicRef.current) return; // Ignore grid clicks while dragging
 
         // --- Mode-Specific Actions ---
-        if (currentMode.startsWith('add-')) { // Check if mode is 'add-tree', 'add-shrub', etc.
+        if (selectedObjectToAdd) {
              raycaster.setFromCamera(pointer, camera);
              const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
              const intersectionPoint = new THREE.Vector3();
              if (!raycaster.ray.intersectPlane(groundPlane, intersectionPoint)) return;
              const worldX = intersectionPoint.x; const worldZ = intersectionPoint.z;
 
-             const typeToAdd = currentMode.split('-')[1]; // Extract 'tree', 'shrub', etc.
-             const baseProps = { id: getInitialObjectId(), type: typeToAdd, worldX, worldZ };
-             sceneLogicRef.current.addObject(baseProps);
-             // onSelectObject(null); // Deselect handled by onInteractionEnd
-             onInteractionEnd(); // Switch back to 'select' mode after adding
-        }
-        else if (currentMode === 'terrain') {
+             // Create object using data from selectedObjectToAdd
+             const newObjectData = {
+                 id: getInitialObjectId(),
+                 type: selectedObjectToAdd.type,
+                 worldX,
+                 worldZ,
+                 ...selectedObjectToAdd.props // Spread the predefined properties
+             };
+             sceneLogicRef.current.addObject(newObjectData);
+             onInteractionEnd(); // Reset mode/selection after adding
+        } else if (currentMode === 'terrain') {
             event.stopPropagation();
             setIsPaintingTerrain(true);
             const dir = event.shiftKey ? -1 : 1;
@@ -450,7 +469,7 @@ function Experience({
             if (orbitControlsRef.current) orbitControlsRef.current.enabled = false;
         }
 
-    }, [currentMode, draggingInfo, brushSize, sceneLogicRef, onInteractionEnd, onSelectObject, getInitialObjectId, raycaster, pointer, camera, gl, paintColor]); // Added currentMode
+    }, [currentMode, selectedObjectToAdd, draggingInfo, brushSize, sceneLogicRef, onInteractionEnd, onSelectObject, getInitialObjectId, raycaster, pointer, camera, gl, paintColor]); // Added currentMode
 
     const handlePointerMove = useCallback((event) => {
         pointerRef.current.x = (event.clientX / window.innerWidth) * 2 - 1;
@@ -565,7 +584,21 @@ export default function PlanEditor() {
     const [selectedObjectToAdd, setSelectedObjectToAdd] = useState(null);
 
     const getNextObjectId = useCallback(() => nextObjectId++, []);
-    const getButtonStyle = (modeOrAction, disabled = false) => ({ margin: '2px', padding: '4px 8px', border: currentMode === modeOrAction ? '2px solid #eee' : '2px solid transparent', backgroundColor: disabled ? '#666' : (currentMode === modeOrAction ? '#555' : '#333'), color: disabled ? '#aaa' : 'white', cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.6 : 1 });
+
+    const getButtonStyle = (modeOrAction, disabled = false, isSelectedToAdd = false) => ({
+        margin: '2px', padding: '4px 8px',
+        border: (currentMode === modeOrAction || isSelectedToAdd) ? '2px solid #eee' : '1px solid #777', // Highlight active mode OR selected config
+        backgroundColor: disabled ? '#666' : ((currentMode === modeOrAction || isSelectedToAdd) ? '#555' : '#333'),
+        color: disabled ? '#aaa' : 'white', cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.6 : 1,
+        display: 'block', // Make add buttons stack vertically
+        width: 'calc(100% - 10px)', // Adjust width for block display
+        textAlign: 'left',
+        marginBottom: '3px',
+        fontSize: '11px', // Smaller font for config buttons
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap',
+    });
 
     useEffect(() => {
         if (selectedObjectId !== null && sceneLogicRef.current) { const props = sceneLogicRef.current.getObjectProperties(selectedObjectId); setSelectedObjectProps(props); }
@@ -589,38 +622,27 @@ export default function PlanEditor() {
     }, []);
 
     // Handler to change the main mode
-const handleSetMode = (newMode) => {
+    const handleSetMode = (newMode) => {
         console.log("Setting mode to:", newMode);
         setCurrentMode(newMode);
-        setShowAddObjectList(false); // Hide list when changing mode
-        setSelectedObjectToAdd(null); // Clear pending add object
-        if (newMode !== 'select') { setSelectedObjectId(null); } // Deselect if not in select mode
+        setSelectedObjectToAdd(null); // Clear pending add object when changing main mode
+        if (newMode !== 'select') { setSelectedObjectId(null); }
     };
-
-    const handleAddObjectClick = () => {
-        if (showAddObjectList) {
-            // If list is open, clicking again closes it and cancels placement intent
-            setShowAddObjectList(false);
-            setSelectedObjectToAdd(null);
-            setCurrentMode('select'); // Revert to select mode
-        } else if (selectedObjectToAdd) {
-             // If list is closed but an object is selected for placement, cancel placement
-             setSelectedObjectToAdd(null);
-             setCurrentMode('select'); // Revert to select mode
-        }
-        else {
-            // Open the list
-            setShowAddObjectList(true);
-            setCurrentMode('add-object-menu'); // Special mode while menu is open
-            setSelectedObjectId(null); // Deselect any object
-        }
-    };
-
+    
     const handleSelectConfiguration = (config) => {
-        setSelectedObjectToAdd(config);
-        setShowAddObjectList(false);
-        setCurrentMode('placing-object'); // Mode indicates user should click terrain
-        console.log("Selected configuration for placement:", config.name);
+        console.log("handleSelectConfiguration", selectedObjectToAdd?.name, config.name);
+        if (selectedObjectToAdd?.name === config.name) {
+            // Clicking the same config again deselects it and returns to 'select' mode
+            setSelectedObjectToAdd(null);
+            setCurrentMode('select');
+            console.log("Deselected configuration for placement");
+        } else {
+            // Select this config for placement
+            setSelectedObjectToAdd(config);
+            setCurrentMode('placing'); // Special mode indicates user should click terrain
+            setSelectedObjectId(null); // Deselect any 3D object
+            console.log("Selected configuration for placement:", config.name);
+        }
     };
 
     // Callback from Experience when an object is selected
@@ -638,9 +660,10 @@ const handleSetMode = (newMode) => {
 
     // Callback from Experience/SceneLogic when an interaction ends that should reset the mode (e.g., Add Object, Resize)
     const handleInteractionEnd = useCallback(() => {
-        console.log("handleInteractionEnd called in PlanEditor - Resetting mode to select");
-        setCurrentMode('select'); // Go back to select mode after adding or resizing
-        setSelectedObjectId(null); // Ensure deselected
+        console.log("handleInteractionEnd called in PlanEditor - Resetting mode to select, clearing add object");
+        setCurrentMode('select');
+        setSelectedObjectId(null);
+        setSelectedObjectToAdd(null); // Clear pending add object
     }, []);
 
     const handleResize = () => {
@@ -674,7 +697,11 @@ const handleSetMode = (newMode) => {
                 console.log("ESC: Deselecting");
                 handleSelectObject(null); // Use the existing handler
             }
-            if (currentMode === 'terrain' || currentMode === 'paint-color') {
+            if (currentMode === 'placing') {
+                console.log("ESC: Cancelling add object placement");
+                setSelectedObjectToAdd(null);
+                setCurrentMode('select');
+            } else if (currentMode === 'terrain' || currentMode === 'paint-color') {
                 handleSetMode('select');
             }
             // Potentially cancel other interactions like add mode?
@@ -728,14 +755,14 @@ const handleSetMode = (newMode) => {
 
             sceneLogicRef.current?.updateObjectPositionWorld(selectedObjectId, currentProps.worldX + dx, currentProps.worldZ + dz);
         }
-    }, [selectedObjectId, clipboard, currentMode, handleSelectObject, handleRemoveSelected, getNextObjectId]); // Add dependencies
+    }, [selectedObjectId, clipboard, currentMode, handleSelectObject, handleRemoveSelected, getNextObjectId, selectedObjectToAdd]); // Add dependencies
 
     const instructions = useMemo(() => {
          switch(currentMode) {
             case 'select': return "Click object to select/edit properties. Drag selected object to move.";
             case 'terrain': return "Click/Drag grid to modify height (Shift=Lower). Esc to exit.";
             case 'paint-color': return "Click/Drag grid to paint color. Esc to exit.";
-            case 'add-object-menu': return "Choose an object from the list below to place.";
+            case 'placing': return `Click terrain to place '${selectedObjectToAdd?.name || ''}'. Click config again or Esc to cancel.`;
             default: return "Select a mode.";
         }
     }, [currentMode, selectedObjectToAdd]);
@@ -768,6 +795,17 @@ const handleSetMode = (newMode) => {
             setSelectedObjectId(null);
         }
     }, [currentMode]);
+
+    const groupedConfigurations = useMemo(() => {
+        return objectConfigurations.reduce((acc, config) => {
+            const type = config.type;
+            if (!acc[type]) {
+                acc[type] = [];
+            }
+            acc[type].push(config);
+            return acc;
+        }, {});
+    }, []); // Runs once
 
     const renderAddObjectList = () => {
         if (!showAddObjectList) return null;
@@ -826,19 +864,21 @@ const handleSetMode = (newMode) => {
         <div style={{ height: '100vh', width: '100vw', display: 'flex', flexDirection: 'column', background: '#282c34' }}>
              {/* UI Overlay - Update Mode Buttons */}
              <div style={{ position: 'absolute', top: '10px', left: '10px', zIndex: 1, color: 'white', background: 'rgba(0,0,0,0.8)', padding: '10px', borderRadius: '5px', fontSize: '12px', width: '220px', maxHeight: 'calc(100vh - 20px)', overflowY: 'auto', boxSizing: 'border-box' }}>
+                <strong>Actions:</strong><br/>
+                    <button onClick={onLoadClick} style={getButtonStyle('load')}>Load</button>
+                    <button onClick={onSaveClick} style={getButtonStyle('save')}>Save</button>
+                    <button onClick={handleReset} style={getButtonStyle('reset')}>Reset</button>
+                    <button onClick={handleRemoveSelected} disabled={selectedObjectId === null} style={getButtonStyle('remove', selectedObjectId === null)}>Remove</button>
+
                  { /* console.log("[PlanEditor] Rendering with showCoordinates:", showCoordinates) */ }
                  <div style={{ marginBottom: '8px' }}>
                      <strong>Mode:</strong><br/>
                      {/* Explicit Mode Buttons */}
+                     <button style={getButtonStyle('placing')} onClick={() => handleSetMode('placing')}>Place</button>
                      <button style={getButtonStyle('select')} onClick={() => handleSetMode('select')}>Select/Move</button>
                      <button style={getButtonStyle('terrain')} onClick={() => handleSetMode('terrain')}>Edit Terrain</button>
                      <button style={getButtonStyle('paint-color')} onClick={() => handleSetMode('paint-color')}>Paint Color</button>
-                     <button style={getButtonStyle(currentMode.startsWith('add-') || currentMode === 'placing-object' || currentMode === 'add-object-menu' ? 'add-object-menu' : 'add-object')} onClick={handleAddObjectClick}>
-                         {selectedObjectToAdd ? `Placing: ${selectedObjectToAdd.name.substring(0,10)}...` : (showAddObjectList ? 'Cancel Add' : 'Add Object')}
-                     </button>
                  </div>
-                <strong>Actions:</strong><br/> <button onClick={onLoadClick} style={getButtonStyle('load')}>Load</button> <button onClick={onSaveClick} style={getButtonStyle('save')}>Save</button>
-                <button onClick={handleReset} style={getButtonStyle('reset')}>Reset</button> <button onClick={handleRemoveSelected} disabled={selectedObjectId === null} style={getButtonStyle('remove', selectedObjectId === null)}>Remove</button>
                  {/* ... Actions, Grid Resize, Brush Size (only relevant in terrain mode?), Aging Slider ... */}
                  <div style={{ marginBottom: '8px', borderTop: '1px solid #555', paddingTop: '8px', display: currentMode === 'terrain' ? 'block' : 'none' }}>
                     <strong>Brush Size:</strong> {brushSize}<br/> <input type="range" min="1" max="10" step="1" value={brushSize} onChange={(e) => setBrushSize(parseInt(e.target.value, 10))} style={{ width: '100%' }}/>
@@ -868,6 +908,29 @@ const handleSetMode = (newMode) => {
                          Show Coordinates
                      </label>
                  </div>
+                 <div style={{ marginBottom: '8px', borderTop: '1px solid #555', paddingTop: '8px' }}>
+                     <strong>Global Age:</strong> {globalAge.toFixed(2)}<br/> <input type="range" min="0" max="1" step="0.01" value={globalAge} onChange={(e) => setGlobalAge(parseFloat(e.target.value))} style={{ width: '100%' }} />
+                 </div>
+                 
+                 <div style={{ borderTop: '1px solid #555', paddingTop: '8px', marginTop: '8px', display: currentMode === 'placing' ? 'block' : 'none' }} >
+                     <strong>Add Object:{selectedObjectToAdd?.name}</strong>
+                     {Object.entries(groupedConfigurations).map(([type, configs]) => (
+                         <div key={type} style={{ marginTop: '5px' }}>
+                             <strong style={{ textTransform: 'capitalize', display: 'block', marginBottom: '3px' }}>{type}s:</strong>
+                             {configs.map((config) => (
+                                 <button
+                                     key={config.name}
+                                     style={getButtonStyle('placing', false, selectedObjectToAdd?.name === config.name)} // Highlight if selected for placement
+                                     onClick={() => handleSelectConfiguration(config)}
+                                     title={`Place ${config.name}`}
+                                 >
+                                     {config.name}
+                                 </button>
+                             ))}
+                         </div>
+                     ))}
+                 </div>
+
                  {/* ... Property Editor (shown only if selectedObjectId is not null) ... */}
                  {selectedObjectId !== null && renderPropertyEditors()}
                  {/* ... Instructions ... */}
