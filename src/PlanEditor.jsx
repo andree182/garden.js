@@ -15,7 +15,7 @@ const INITIAL_GRID_WIDTH = 20;
 const INITIAL_GRID_HEIGHT = 20;
 const MIN_GRID_DIM = 5;
 const MAX_GRID_DIM = 100;
-const COLORS = ['#8BC34A', '#CDDC39', '#FFEB3B', '#FFC107', '#FF9800', '#795548']; // Terrain Colors
+const COLORS = ['#8BC34A', '#CDDC39', '#FFEB3B', '#FFC107', '#FF9800', '#795548', '#48b5d0', '#bbbbbb']; // Terrain Colors
 const DRAG_PLANE_OFFSET = 0.1; // Place drag plane slightly above ground
 const DRAG_THRESHOLD = 5; // Minimum pixels pointer must move to initiate a drag
 const LOCAL_STORAGE_KEY = 'planEditorSaveData_v5'; // Key for localStorage, update if format changes significantly
@@ -291,6 +291,11 @@ const SceneWithLogic = forwardRef(({
         getGroundHeightAtWorld: getGroundHeightAtWorld,
         getGridDimensions: () => ({ gridWidth, gridHeight }),
         applyTerrainBrush: applyTerrainBrush,
+        updateCellColor: (gridX, gridZ, newColor) => {
+            if (gridX >= 0 && gridX < gridWidth && gridZ >= 0 && gridZ < gridHeight) {
+                setColorData(prevData => { const newData = prevData.map(r => [...r]); newData[gridZ][gridX] = newColor; return newData; });
+            }
+        },
     }), [ heightData, colorData, objects, gridWidth, gridHeight, brushSize, applyTerrainBrush, getGroundHeightAtWorld, onInteractionEnd ]);
 
 
@@ -370,7 +375,7 @@ function Experience({
     addModeObjectType, // Only used when currentMode is 'add-*'
     selectedObjectId, // Read-only, selection managed by PlanEditor via onSelectObject
     globalAge, brushSize, // Props for rendering/API
-    sceneLogicRef, onSelectObject, onInteractionEnd, getInitialObjectId, showCoordinates // Refs/Callbacks
+    sceneLogicRef, onSelectObject, onInteractionEnd, getInitialObjectId, showCoordinates, paintColor // Refs/Callbacks
 }) {
     const { raycaster, pointer, camera, gl } = useThree();
     const orbitControlsRef = useRef();
@@ -379,6 +384,7 @@ function Experience({
     // --- Interaction State ---
     const [draggingInfo, setDraggingInfo] = useState(null);
     const [isPaintingTerrain, setIsPaintingTerrain] = useState(false);
+    const [isPaintingColor, setIsPaintingColor] = useState(false);
     const [paintDirection, setPaintDirection] = useState(1);
     const pointerRef = useRef({ x: 0, y: 0 });
 
@@ -434,8 +440,15 @@ function Experience({
              // Click on grid in select mode deselects any selected object
              //onSelectObject(null);
         }
+        else if (currentMode === 'paint-color') {
+            event.stopPropagation();
+            setIsPaintingColor(true);
+            sceneLogicRef.current?.updateCellColor(gridX, gridZ, paintColor); // Paint the clicked cell
+            event.target?.setPointerCapture(event.pointerId);
+            if (orbitControlsRef.current) orbitControlsRef.current.enabled = false;
+        }
 
-    }, [currentMode, draggingInfo, brushSize, sceneLogicRef, onInteractionEnd, onSelectObject, getInitialObjectId, raycaster, pointer, camera, gl]); // Added currentMode
+    }, [currentMode, draggingInfo, brushSize, sceneLogicRef, onInteractionEnd, onSelectObject, getInitialObjectId, raycaster, pointer, camera, gl, paintColor]); // Added currentMode
 
     const handlePointerMove = useCallback((event) => {
         pointerRef.current.x = (event.clientX / window.innerWidth) * 2 - 1;
@@ -461,8 +474,15 @@ function Experience({
                  const gridX = Math.floor(intersectionPoint.x / CELL_SIZE + gridWidth / 2); const gridZ = Math.floor(intersectionPoint.z / CELL_SIZE + gridHeight / 2);
                  if (gridX >= 0 && gridX < gridWidth && gridZ >= 0 && gridZ < gridHeight) { sceneLogicRef.current.applyTerrainBrush(gridX, gridZ, HEIGHT_MODIFIER * paintDirection); }
             }
+        } else if (isPaintingColor) { // Painting color
+            const { gridWidth, gridHeight } = sceneLogicRef.current.getGridDimensions();
+            const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0); const intersectionPoint = new THREE.Vector3();
+            if (raycaster.ray.intersectPlane(groundPlane, intersectionPoint)) {
+                 const gridX = Math.floor(intersectionPoint.x / CELL_SIZE + gridWidth / 2); const gridZ = Math.floor(intersectionPoint.z / CELL_SIZE + gridHeight / 2);
+                 if (gridX >= 0 && gridX < gridWidth && gridZ >= 0 && gridZ < gridHeight) { sceneLogicRef.current.updateCellColor(gridX, gridZ, paintColor); } // Paint cell under pointer
+            }
         }
-    }, [draggingInfo, isPaintingTerrain, paintDirection, raycaster, camera, sceneLogicRef]);
+    }, [draggingInfo, isPaintingTerrain, isPaintingColor, paintDirection, raycaster, camera, sceneLogicRef, paintColor]);
 
     const handlePointerUp = useCallback((event) => {
         const pointerId = event.pointerId;
@@ -477,8 +497,13 @@ function Experience({
             setIsPaintingTerrain(false);
             if (orbitControlsRef.current) orbitControlsRef.current.enabled = true;
             gl.domElement.releasePointerCapture?.(pointerId);
+        } else if (isPaintingColor) { // Color painting ended
+            console.log("Pointer Up - Color Paint End");
+            setIsPaintingColor(false);
+            if (orbitControlsRef.current) orbitControlsRef.current.enabled = true;
+            gl.domElement.releasePointerCapture?.(pointerId);
         }
-    }, [draggingInfo, isPaintingTerrain, gl /* removed onInteractionEnd */]); // Removed onInteractionEnd
+    }, [draggingInfo, isPaintingTerrain, isPaintingColor, gl]);
 
      // Effect to add/remove global listeners
      useEffect(() => {
@@ -486,7 +511,7 @@ function Experience({
         const moveHandler = (event) => handlePointerMove(event);
         const upHandler = (event) => handlePointerUp(event);
         // Listen if dragging, actually dragging, or painting
-        if (draggingInfo || isPaintingTerrain) {
+        if (draggingInfo || isPaintingTerrain || isPaintingColor) {
             domElement.addEventListener('pointermove', moveHandler);
             domElement.addEventListener('pointerup', upHandler);
             domElement.addEventListener('pointerleave', upHandler); // End interaction if pointer leaves canvas
@@ -497,7 +522,7 @@ function Experience({
             domElement.removeEventListener('pointerleave', upHandler);
             if (orbitControlsRef.current) orbitControlsRef.current.enabled = true; // Ensure re-enabled
         };
-    }, [draggingInfo, isPaintingTerrain, handlePointerMove, handlePointerUp, gl]);
+    }, [draggingInfo, isPaintingTerrain, isPaintingColor, handlePointerMove, handlePointerUp, gl]);
 
      
     console.log("[Experience] Received showCoordinates:", showCoordinates);
@@ -531,6 +556,7 @@ export default function PlanEditor() {
     const [desiredWidth, setDesiredWidth] = useState(INITIAL_GRID_WIDTH);
     const [desiredHeight, setDesiredHeight] = useState(INITIAL_GRID_HEIGHT);
     const [currentGridSize, setCurrentGridSize] = useState({w: INITIAL_GRID_WIDTH, h: INITIAL_GRID_HEIGHT});
+    const [paintColor, setPaintColor] = useState(COLORS[1]); // Default paint color
     const [showCoordinates, setShowCoordinates] = useState(true);
     const [clipboard, setClipboard] = useState(null); // For copy-paste
 
@@ -621,6 +647,9 @@ export default function PlanEditor() {
             if (selectedObjectId !== null) {
                 console.log("ESC: Deselecting");
                 handleSelectObject(null); // Use the existing handler
+            }
+            if (currentMode === 'terrain' || currentMode === 'paint-color') {
+                handleSetMode('select');
             }
             // Potentially cancel other interactions like add mode?
             // if (currentMode.startsWith('add-')) {
@@ -733,6 +762,7 @@ export default function PlanEditor() {
                      {/* Explicit Mode Buttons */}
                      <button style={getButtonStyle('select')} onClick={() => handleSetMode('select')}>Select/Move</button>
                      <button style={getButtonStyle('terrain')} onClick={() => handleSetMode('terrain')}>Edit Terrain</button>
+                     <button style={getButtonStyle('paint-color')} onClick={() => handleSetMode('paint-color')}>Paint Color</button>
                      <button style={getButtonStyle('add-tree')} onClick={() => handleSetMode('add-tree')}>Add Tree</button>
                      <button style={getButtonStyle('add-shrub')} onClick={() => handleSetMode('add-shrub')}>Add Shrub</button>
                      <button style={getButtonStyle('add-grass')} onClick={() => handleSetMode('add-grass')}>Add Grass</button>
@@ -748,6 +778,18 @@ export default function PlanEditor() {
                         x
                         <input type="number" value={desiredHeight} onChange={(e) => setDesiredHeight(e.target.value)} min={MIN_GRID_DIM} max={MAX_GRID_DIM} style={{ width: '40px', marginLeft: '3px', marginRight: '5px' }}/>
                         <button onClick={handleResize} style={getButtonStyle('resize')}>Resize</button>
+                    </div>
+                 </div>
+                 <div style={{ marginBottom: '8px', borderTop: '1px solid #555', paddingTop: '8px', display: currentMode === 'paint-color' ? 'block' : 'none' }}>
+                    <strong>Paint Color:</strong>
+                    <div style={{ display: 'flex', alignItems: 'center', marginBottom: '5px' }}>
+                        <input type="color" value={paintColor} onChange={(e) => setPaintColor(e.target.value)} style={{ marginRight: '5px', height: '25px', width: '40px', padding: '0 2px', border: '1px solid #555' }}/>
+                        <span style={{ display: 'inline-block', width: '15px', height: '15px', backgroundColor: paintColor, border: '1px solid #fff' }}></span>
+                    </div>
+                    <div>
+                        {COLORS.map(color => (
+                            <button key={color} title={color} onClick={() => setPaintColor(color)} style={{ width: '20px', height: '20px', backgroundColor: color, border: paintColor === color ? '2px solid white' : '1px solid grey', marginRight: '3px', padding: 0, cursor: 'pointer' }} />
+                        ))}
                     </div>
                  </div>
                  <div style={{ marginBottom: '8px', borderTop: '1px solid #555', paddingTop: '8px' }}>
@@ -772,6 +814,7 @@ export default function PlanEditor() {
                          globalAge={globalAge} brushSize={brushSize} sceneLogicRef={sceneLogicRef}
                          onSelectObject={handleSelectObject} onInteractionEnd={handleInteractionEnd} getInitialObjectId={getNextObjectId}
                          showCoordinates={showCoordinates}
+                         paintColor={paintColor}
                     />
                 </Canvas>
             </div>
