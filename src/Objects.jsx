@@ -304,6 +304,7 @@ export const DeciduousTree = React.memo(({ position, isSelected, onSelect, onPoi
     foliageColor = "#559040", // Default summer green
     fruitType = 'apple', // 'apple', 'pear', 'plum'
     fruitDensity = 30, // Lower density default for fruits
+    foliageOpacity = 0.85
 }) => {
 
     const fruitMeshRef = useRef();
@@ -320,6 +321,7 @@ export const DeciduousTree = React.memo(({ position, isSelected, onSelect, onPoi
     const currentTrunkDiameter = lerp(0.05, trunkDiameter, globalAge);
     const currentFoliageDiameter = lerp(0.3, foliageDiameter, globalAge);
     const foliageRadius = currentFoliageDiameter / 2;
+    const foliageCenterY = currentTrunkHeight + foliageRadius * 0.8;
 
     // --- Foliage Appearance ---
     const currentFoliageColor = useMemo(() => {
@@ -338,18 +340,18 @@ export const DeciduousTree = React.memo(({ position, isSelected, onSelect, onPoi
                 // Pear shape is hard with primitives, use sphere + maybe small cone? Or just sphere.
                 geom = new THREE.SphereGeometry(0.05, 8, 6); // Small sphere for pear
                 color = "#D1E231"; // Yellow-green
-                scale = 0.07;
+                scale = 1;
                 break;
             case 'plum':
                 geom = new THREE.SphereGeometry(0.04, 8, 6); // Slightly smaller sphere for plum
                 color = "#6A0DAD"; // Purple
-                scale = 0.04;
+                scale = 0.5;
                 break;
             case 'apple':
             default:
                 geom = new THREE.SphereGeometry(0.045, 8, 6); // Sphere for apple
                 color = "#FF6347"; // Tomato red
-                scale = 0.05;
+                scale = 1.5;
                 break;
         }
         const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.6, metalness: 0.1 });
@@ -365,59 +367,68 @@ export const DeciduousTree = React.memo(({ position, isSelected, onSelect, onPoi
     }, [hasFruit, fruitDensity, foliageRadius]);
 
     useLayoutEffect(() => {
-        if (!hasFruit || !fruitMeshRef.current || fruitCount === 0) return;
+        if (!hasFruit || !fruitMeshRef.current || fruitCount === 0) {
+            return;
+        }
 
         const mesh = fruitMeshRef.current;
-        const baseFoliageY = currentTrunkHeight + foliageRadius * 0.2; // Start fruits slightly above trunk top
 
         for (let i = 0; i < fruitCount; i++) {
-            // Position randomly within the foliage sphere volume
+            // Position randomly within the foliage sphere volume *relative to origin*
             const lambda = Math.random();
-            const phi = Math.acos(2 * Math.random() - 1); // Distribute evenly on sphere surface
+            const phi = Math.acos(2 * Math.random() - 1);
             const theta = Math.random() * Math.PI * 2;
-
-            const r = foliageRadius * Math.cbrt(lambda); // Distribute within volume
-
+            const surfaceOffsetFactor = 0.85 + Math.random() * 0.2; // e.g., between 90% and 110% of radius
+            const r = foliageRadius * surfaceOffsetFactor;
             tempVec.setFromSphericalCoords(r, phi, theta);
-            tempObject.position.set(tempVec.x, tempVec.y + baseFoliageY, tempVec.z);
 
-            // Random slight rotation for fruits (optional)
+            tempObject.position.set(
+                tempVec.x,
+                tempVec.y + foliageCenterY, // Add offset here
+                tempVec.z
+            );
+
             tempObject.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
-            tempObject.scale.setScalar(1); // Reset scale if needed
+            tempObject.scale.setScalar(fruitScale); // Use calculated fruit scale
 
-            // --- Update Matrix ---
             tempObject.updateMatrix();
             mesh.setMatrixAt(i, tempObject.matrix);
         }
-        mesh.count = fruitCount; // IMPORTANT: Set the rendered count
+        mesh.count = fruitCount;
         mesh.instanceMatrix.needsUpdate = true;
         mesh.computeBoundingSphere();
 
-    }, [hasFruit, fruitCount, foliageRadius, currentTrunkHeight, fruitGeometry]); // Re-run if fruit appears/disappears or size changes
+    }, [hasFruit, fruitCount, foliageRadius, foliageCenterY, fruitGeometry, fruitScale]); // Re-run if fruit appears/disappears or size changes
 
 
     return (
         <ObjectBase position={position} isSelected={isSelected} onSelect={onSelect} onPointerDown={onPointerDown} objectId={objectId} type="deciduous_tree">
             {/* Trunk */}
-            <mesh position={[0, currentTrunkHeight / 2, 0]} scale={[currentTrunkDiameter / 0.25, currentTrunkHeight / trunkHeight || 0.01, currentTrunkDiameter / 0.25]} castShadow>
-                <cylinderGeometry args={[trunkDiameter * 0.4, trunkDiameter * 0.5, trunkHeight, 8]} />{/* Base diameter 0.5 for scale=1 */}
+            <mesh position={[0, currentTrunkHeight / 2, 0]} scale={[currentTrunkDiameter / trunkDiameter || 0.01, currentTrunkHeight / trunkHeight || 0.01, currentTrunkDiameter / trunkDiameter || 0.01]} castShadow> {/* Use base diameter from props for scaling */}
+                <cylinderGeometry args={[trunkDiameter * 0.4, trunkDiameter * 0.5, trunkHeight, 8]} />
                 <meshStandardMaterial color={trunkColor} />
             </mesh>
 
             {/* Foliage - represented as a sphere */}
             {hasLeaves && (
-                 <mesh position={[0, currentTrunkHeight + foliageRadius * 0.8, 0]} scale={currentFoliageDiameter} castShadow> {/* Scale sphere */}
-                    <sphereGeometry args={[0.5, 16, 12]} />{/* Base radius 0.5 */}
-                    <meshStandardMaterial color={currentFoliageColor} roughness={0.8} metalness={0.1}/>
+                 <mesh position={[0, foliageCenterY, 0]} scale={currentFoliageDiameter} castShadow> {/* Use foliageCenterY */}
+                    <sphereGeometry args={[0.5, 16, 12]} />
+                    <meshStandardMaterial
+                        color={currentFoliageColor}
+                        roughness={0.8}
+                        metalness={0.1}
+                        transparent={true} // Enable transparency
+                        opacity={foliageOpacity} // Use opacity prop
+                        depthWrite={foliageOpacity > 0.95} // Turn off depth write for significant transparency
+                        />
                 </mesh>
             )}
              {/* Fruits - Instanced Mesh */}
              {hasFruit && fruitCount > 0 && (
                 <instancedMesh
                     ref={fruitMeshRef}
-                    args={[fruitGeometry, fruitMaterial, fruitCount]} // Use calculated count
+                    args={[fruitGeometry, fruitMaterial, fruitCount]}
                     castShadow
-                    // Fruits might not need to receive shadows
                 />
              )}
         </ObjectBase>
@@ -429,6 +440,7 @@ DeciduousTree.editorSchema = [
     { name: 'trunkHeight', label: 'Trunk H', type: 'number', step: 0.1, min: 0.2, max: 5, defaultValue: 1.0 },
     { name: 'trunkDiameter', label: 'Trunk Ø', type: 'number', step: 0.05, min: 0.05, max: 1.5, defaultValue: 0.25 },
     { name: 'foliageDiameter', label: 'Foliage Ø', type: 'number', step: 0.1, min: 0.3, max: 6, defaultValue: 1.8 },
+    { name: 'foliageOpacity', label: 'Foliage Opacity', type: 'number', step: 0.05, min: 0.1, max: 1.0, defaultValue: 0.85 },
     { name: 'fruitDensity', label: 'Fruit Density', type: 'number', step: 1, min: 0, max: 100, defaultValue: 30 },
     { name: 'trunkColor', label: 'Trunk Clr', type: 'color', defaultValue: "#A0522D" },
     { name: 'foliageColor', label: 'Summer Clr', type: 'color', defaultValue: "#559040" }, // Base summer color
