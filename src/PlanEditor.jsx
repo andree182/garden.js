@@ -1025,6 +1025,30 @@ export default function PlanEditor() {
 
             {renderAddObjectList()}
 
+            
+            {/* Floating GitHub Link Button */}
+            <a
+                href="https://github.com/andree182/garden.js/"
+                target="_blank"
+                rel="noopener noreferrer"
+                title="View source on GitHub"
+                style={{
+                    position: 'fixed', // Position relative to the viewport
+                    bottom: '15px',
+                    right: '15px',
+                    padding: '8px 12px',
+                    backgroundColor: '#404040', // Dark grey background
+                    color: '#ffffff', // White text
+                    textDecoration: 'none',
+                    borderRadius: '4px',
+                    border: '#aaa solid 1px',
+                    fontSize: '12px',
+                    zIndex: 10 // Ensure it's above canvas, potentially adjust if overlaps other UI
+                }}
+            >
+                => GitHub
+            </a>
+
             <input type="file" ref={fileInputRef} onChange={onFileSelected} accept=".json,application/json" style={{ display: 'none' }} />
 
              <div style={{ flexGrow: 1, overflow: 'hidden' }}>
