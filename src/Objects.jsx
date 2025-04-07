@@ -95,14 +95,29 @@ Tree.editorSchema = [
 export const Shrub = React.memo(({ position, isSelected, onSelect, onPointerDown, objectId, globalAge = 1,
     // Editable properties
     color = "#556B2F",
-    maxRadius = 0.4
+    maxRadius = 0.4,
+    currentMonth = 6
 }) => {
     const currentRadius = lerp(0.1, maxRadius, globalAge);
+    
+    const isWinter = useMemo(() => currentMonth >= 11 || currentMonth <= 3, [currentMonth]);
+    const isSpring = useMemo(() => currentMonth >= 4 && currentMonth <= 5, [currentMonth]);
+
+    const materialProps = useMemo(() => {
+        if (isWinter) {
+            return { color: "#A08C7B", transparent: true, opacity: 0.35 }; // Bare branches look
+        } else if (isSpring) {
+            return { color: "#E57373", transparent: false, opacity: 1.0 }; // Reddish spring foliage
+        } else {
+            return { color: color, transparent: false, opacity: 1.0 }; // Default color
+        }
+    }, [isWinter, isSpring, color]);
+
     return (
         <ObjectBase position={position} isSelected={isSelected} onSelect={onSelect} onPointerDown={onPointerDown} objectId={objectId} type="shrub">
             <mesh position={[0, currentRadius, 0]} scale={[currentRadius / maxRadius || 0.01, currentRadius / maxRadius || 0.01, currentRadius / maxRadius || 0.01]} castShadow>
                 <sphereGeometry args={[maxRadius, 16, 12]} />
-                <meshStandardMaterial color={color} roughness={0.9} /> {/* Use prop color */}
+                <meshStandardMaterial color={color} roughness={0.9} {...materialProps} /> {/* Use prop color */}
             </mesh>
         </ObjectBase>
     );
@@ -126,7 +141,8 @@ export const Grass = React.memo(({ position, isSelected, onSelect, onPointerDown
     topColor = "#66AA44",
     colorRatio = 0.5,
     density = 50,
-    straightness = 0.7
+    straightness = 0.7,
+    currentMonth = 6
  }) => {
 
     const instancedMeshRef = useRef();
@@ -162,14 +178,24 @@ export const Grass = React.memo(({ position, isSelected, onSelect, onPointerDown
         return Math.min(MAX_GRASS_BLADES, Math.max(1, Math.floor(density * area * 150))); // Adjust multiplier for visual density
     }, [density, baseDiameter]);
 
+    const [seasonalBottomColor, seasonalTopColor] = useMemo(() => {
+        const isWinter = currentMonth >= 11 || currentMonth <= 3;
+        if (isWinter) {
+            return ["#BDB76B", "#CDC08C"]; // Yellowish/brown winter colors
+        } else {
+            // Use the editable prop colors for other seasons
+            return [bottomColor, topColor];
+        }
+    }, [currentMonth, bottomColor, topColor]);
+
     // Effect to update vertex colors when color props change
     useEffect(() => {
         if (!geometry || !geometry.attributes.color) return;
 
         const colors = geometry.attributes.color.array;
         const positions = geometry.attributes.position.array;
-        const bColor = tempColor.set(bottomColor);
-        const tColor = tempColor.set(topColor);
+        const bColor = tempColor.set(seasonalBottomColor);
+        const tColor = tempColor.set(seasonalTopColor);
         const finalColor = new THREE.Color();
         const vertexCount = geometry.attributes.position.count;
 
@@ -190,7 +216,7 @@ export const Grass = React.memo(({ position, isSelected, onSelect, onPointerDown
         geometry.attributes.color.needsUpdate = true;
         // console.log("Updated grass vertex colors");
 
-    }, [geometry, bottomColor, topColor, colorRatio]);
+    }, [geometry, seasonalBottomColor, seasonalTopColor, colorRatio]);
 
 
     // Effect to update instance transforms when parameters change

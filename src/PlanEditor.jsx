@@ -7,6 +7,8 @@ import * as THREE from 'three';
 // Import object components AND their editor schemas
 import { ObjectComponents, ObjectEditorSchemas, objectConfigurations } from './Objects.jsx';
 
+const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
 // --- Configuration ---
 const CELL_SIZE = 1;
 const HEIGHT_MODIFIER = 0.1; // Base height change per brush application
@@ -81,7 +83,8 @@ const GridCell = React.memo(({ x, z, height, color, onPointerDown, gridWidth, gr
 const SceneWithLogic = forwardRef(({
     selectedObjectId, globalAge, brushSize, // Props
     onObjectSelect, onObjectPointerDown, onGridPointerDown, onInteractionEnd,
-    showCoordinates, sunAzimuth, sunElevation, terrainPaintMode, absolutePaintHeight
+    showCoordinates, sunAzimuth, sunElevation, terrainPaintMode, absolutePaintHeight,
+    currentMonth
 }, ref) => {
     const sanitizeObjectsArray = (arr) => Array.isArray(arr) ? arr.filter(obj => obj && typeof obj === 'object' && obj.id != null) : [];
     const CURRENT_SAVE_VERSION = 5;
@@ -332,9 +335,9 @@ const SceneWithLogic = forwardRef(({
                 return null;
             const ObjectComponent = ObjectComponents[obj.type]; if (!ObjectComponent) return null;
             const groundHeight = getGroundHeightAtWorld(obj.worldX, obj.worldZ); const worldYBase = getWorldYBase(groundHeight); const position = [obj.worldX, worldYBase, obj.worldZ];
-            return ( <ObjectComponent key={obj.id} objectId={obj.id} position={position} isSelected={obj.id === selectedObjectId} onSelect={() => onObjectSelect(obj.id)} onPointerDown={onObjectPointerDown} globalAge={globalAge} {...obj} /> );
+            return ( <ObjectComponent key={obj.id} objectId={obj.id} position={position} isSelected={obj.id === selectedObjectId} onSelect={() => onObjectSelect(obj.id)} onPointerDown={onObjectPointerDown} globalAge={globalAge} currentMonth={currentMonth} {...obj} /> );
         })
-    }, [objects, selectedObjectId, globalAge, onObjectSelect, onObjectPointerDown, getGroundHeightAtWorld, gridWidth, gridHeight]);
+    }, [objects, selectedObjectId, globalAge, onObjectSelect, onObjectPointerDown, getGroundHeightAtWorld, gridWidth, gridHeight, currentMonth]);
 
     // --- Coordinate Labels ---
     const coordinateLabels = useMemo(() => {
@@ -440,7 +443,8 @@ function Experience({
     selectedObjectId, // Read-only, selection managed by PlanEditor via onSelectObject
     globalAge, brushSize, // Props for rendering/API
     sceneLogicRef, onSelectObject, onInteractionEnd, getInitialObjectId, showCoordinates, paintColor, sunAzimuth, sunElevation,
-    terrainPaintMode, absolutePaintHeight
+    terrainPaintMode, absolutePaintHeight,
+    currentMonth
 }) {
     const { raycaster, pointer, camera, gl } = useThree();
     const orbitControlsRef = useRef();
@@ -616,6 +620,7 @@ function Experience({
                 onObjectSelect={onSelectObject} onObjectPointerDown={handleObjectPointerDown} onGridPointerDown={handleGridPointerDown} showCoordinates={showCoordinates}
                 onInteractionEnd={onInteractionEnd} sunAzimuth={sunAzimuth} sunElevation={sunElevation} // Pass down for Add/Resize
                 terrainPaintMode={terrainPaintMode} absolutePaintHeight={absolutePaintHeight}
+                currentMonth={currentMonth}
             />
             {draggingInfo && (<Plane ref={dragPlaneRef} args={[10000, 10000]} rotation={[-Math.PI / 2, 0, 0]} position={[0, draggingInfo.initialY, 0]} visible={false} />)}
             {/* Disable controls only when actually dragging or painting */}
@@ -648,6 +653,7 @@ export default function PlanEditor() {
     const [selectedObjectToAdd, setSelectedObjectToAdd] = useState(null);
     const [sunAzimuth, setSunAzimuth] = useState(45); // Default: Northeast-ish
     const [sunElevation, setSunElevation] = useState(60); // Default: Fairly high sun
+    const [currentMonth, setCurrentMonth] = useState(6);
 
     const getNextObjectId = useCallback(() => nextObjectId++, []);
 
@@ -999,6 +1005,18 @@ export default function PlanEditor() {
                      </div>
                  </div>
 
+                 {/* Time of Year Slider */}
+                 <div style={{ marginBottom: '8px', borderTop: '1px solid #555', paddingTop: '8px' }}>
+                     <strong>Time of Year:</strong> {MONTH_NAMES[currentMonth - 1]}<br/>
+                     <input
+                         type="range"
+                         min="1" max="12" step="1" // Months 1 to 12
+                         value={currentMonth}
+                         onChange={(e) => setCurrentMonth(parseInt(e.target.value, 10))}
+                         style={{ width: '100%' }}
+                     />
+                 </div>
+
                  <div style={{ borderTop: '1px solid #555', paddingTop: '8px', marginTop: '8px', display: currentMode === 'placing' ? 'block' : 'none' }} >
                      <strong>Add Object:{selectedObjectToAdd?.name}</strong>
                      {Object.entries(groupedConfigurations).map(([type, configs]) => (
@@ -1046,7 +1064,7 @@ export default function PlanEditor() {
                     zIndex: 10 // Ensure it's above canvas, potentially adjust if overlaps other UI
                 }}
             >
-                => GitHub
+                =&amp; GitHub
             </a>
 
             <input type="file" ref={fileInputRef} onChange={onFileSelected} accept=".json,application/json" style={{ display: 'none' }} />
@@ -1064,6 +1082,7 @@ export default function PlanEditor() {
                          sunAzimuth={sunAzimuth} // Pass down sun state
                          sunElevation={sunElevation} // Pass down sun state
                          terrainPaintMode={terrainPaintMode} absolutePaintHeight={absolutePaintHeight} 
+                         currentMonth={currentMonth}
                     />
                 </Canvas>
             </div>
