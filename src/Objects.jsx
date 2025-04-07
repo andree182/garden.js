@@ -21,7 +21,13 @@ export const ObjectBase = ({ children, position, isSelected, onSelect, onPointer
     const [animOffset] = useState(() => Math.random() * Math.PI * 2);
     const [freqMult] = useState(() => 0.8 + Math.random() * 0.4);
 
+    const shouldAnimate = useMemo(() =>
+        ['tree', 'deciduous_tree', 'shrub', 'grass'].includes(type),
+    [type]);
+
     useFrame((state) => {
+        if (!shouldAnimate || !groupRef.current) return;
+
         const time = state.clock.elapsedTime;
         const baseFrequency = 1;
         const baseAmplitude = 0.05;
@@ -551,6 +557,194 @@ DeciduousTree.editorSchema = [
     { name: 'fruitType', label: 'Fruit Type', type: 'select', options: ['apple', 'pear', 'plum', 'none'], defaultValue: 'apple' },
 ];
 
+export const Hedge = React.memo(({ position, isSelected, onSelect, onPointerDown, objectId, globalAge=1,
+    width = 0.5, length = 1.5, height = 0.8, color = "#3A5F0B" // Dark Hedge Green
+}) => {
+    // Apply aging to height/width/length? Maybe just height for simplicity.
+    const currentHeight = lerp(0.1, height, globalAge);
+    const currentWidth = lerp(0.1, width, globalAge);
+    const currentLength = lerp(0.2, length, globalAge);
+
+    return (
+        <ObjectBase position={position} isSelected={isSelected} onSelect={onSelect} onPointerDown={onPointerDown} objectId={objectId} type="hedge">
+             <mesh position={[0, currentHeight / 2, 0]} scale={[currentLength, currentHeight, currentWidth]} castShadow receiveShadow> {/* Map L,H,W to X,Y,Z scale */}
+                 <boxGeometry args={[1, 1, 1]} />
+                 <meshStandardMaterial color={color} roughness={0.9} />
+             </mesh>
+        </ObjectBase>
+    );
+});
+Hedge.editorSchema = [
+    { name: 'length', label: 'Length (X)', type: 'number', step: 0.1, min: 0.2, max: 10, defaultValue: 1.5 },
+    { name: 'width', label: 'Width (Z)', type: 'number', step: 0.1, min: 0.2, max: 5, defaultValue: 0.5 },
+    { name: 'height', label: 'Height (Y)', type: 'number', step: 0.1, min: 0.1, max: 3, defaultValue: 0.8 },
+    { name: 'color', label: 'Color', type: 'color', defaultValue: "#3A5F0B" },
+];
+
+// Stepping Stone
+export const SteppingStone = React.memo(({ position, isSelected, onSelect, onPointerDown, objectId, globalAge=1, // Age unlikely to affect stone
+    diameter = 0.4, height = 0.05, color = "#808080" // Grey
+}) => {
+    // No aging applied to dimensions
+    return (
+        <ObjectBase position={[position[0], position[1] + height/2, position[2]]} isSelected={isSelected} onSelect={onSelect} onPointerDown={onPointerDown} objectId={objectId} type="stepping_stone">
+            <mesh castShadow={false} receiveShadow> {/* Stones often don't cast strong shadows */}
+                 <cylinderGeometry args={[diameter / 2, diameter / 2, height, 12]} /> {/* TopRad, BotRad, H, Segs */}
+                 <meshStandardMaterial color={color} roughness={0.8} metalness={0.1}/>
+             </mesh>
+        </ObjectBase>
+    );
+});
+SteppingStone.editorSchema = [
+    { name: 'diameter', label: 'Diameter', type: 'number', step: 0.05, min: 0.1, max: 1.5, defaultValue: 0.4 },
+    { name: 'height', label: 'Thickness', type: 'number', step: 0.01, min: 0.02, max: 0.2, defaultValue: 0.05 },
+    { name: 'color', label: 'Color', type: 'color', defaultValue: "#808080" },
+];
+
+// Raised Bed
+export const RaisedBed = React.memo(({ position, isSelected, onSelect, onPointerDown, objectId, globalAge=1,
+    width = 0.8, length = 1.5, height = 0.3,
+    frameColor = "#8B4513", // Brown wood color
+    soilColor = "#5C4033" // Dark brown soil
+}) => {
+    const frameThickness = 0.05; // Thickness of the bed walls
+    const soilHeightOffset = -0.03; // How far below the top edge the soil starts
+
+    // Calculate inner dimensions for soil
+    const soilLength = length - frameThickness * 2;
+    const soilWidth = width - frameThickness * 2;
+    const soilHeight = height + soilHeightOffset; // Make soil slightly shorter than frame
+
+    return (
+        // Use ObjectBase for selection/interaction, position base correctly
+        <ObjectBase position={position} isSelected={isSelected} onSelect={onSelect} onPointerDown={onPointerDown} objectId={objectId} type="raised_bed">
+            {/* Frame using Box helper for simplicity? Or manual mesh */}
+             {/* We need 4 walls and potentially a bottom, Box helper isn't ideal. Let's use meshes. */}
+             {/* Front/Back Walls */}
+             <mesh position={[0, height/2, width/2 - frameThickness/2]} scale={[length, height, frameThickness]} castShadow receiveShadow>
+                <boxGeometry args={[1,1,1]}/>
+                <meshStandardMaterial color={frameColor} />
+             </mesh>
+             <mesh position={[0, height/2, -width/2 + frameThickness/2]} scale={[length, height, frameThickness]} castShadow receiveShadow>
+                <boxGeometry args={[1,1,1]}/>
+                <meshStandardMaterial color={frameColor} />
+             </mesh>
+             {/* Left/Right Walls */}
+              <mesh position={[length/2 - frameThickness/2, height/2, 0]} scale={[frameThickness, height, width - frameThickness*2]} castShadow receiveShadow> {/* Adjusted width */}
+                <boxGeometry args={[1,1,1]}/>
+                <meshStandardMaterial color={frameColor} />
+             </mesh>
+             <mesh position={[-length/2 + frameThickness/2, height/2, 0]} scale={[frameThickness, height, width - frameThickness*2]} castShadow receiveShadow> {/* Adjusted width */}
+                <boxGeometry args={[1,1,1]}/>
+                <meshStandardMaterial color={frameColor} />
+             </mesh>
+
+            {/* Soil */}
+            {soilHeight > 0.01 && soilLength > 0 && soilWidth > 0 && ( // Only render if dimensions are valid
+                <mesh position={[0, soilHeight / 2, 0]} scale={[soilLength, soilHeight, soilWidth]} receiveShadow> {/* Position slightly below top */}
+                    <boxGeometry args={[1, 1, 1]} />
+                    <meshStandardMaterial color={soilColor} roughness={0.9} metalness={0.05} />
+                </mesh>
+            )}
+        </ObjectBase>
+    );
+});
+RaisedBed.editorSchema = [
+    { name: 'length', label: 'Length (X)', type: 'number', step: 0.1, min: 0.3, max: 5, defaultValue: 1.5 },
+    { name: 'width', label: 'Width (Z)', type: 'number', step: 0.1, min: 0.3, max: 3, defaultValue: 0.8 },
+    { name: 'height', label: 'Height (Y)', type: 'number', step: 0.05, min: 0.1, max: 1, defaultValue: 0.3 },
+    { name: 'frameColor', label: 'Frame Color', type: 'color', defaultValue: "#8B4513" },
+    { name: 'soilColor', label: 'Soil Color', type: 'color', defaultValue: "#5C4033" },
+];
+
+// Car (Simplified Box Model)
+export const Car = React.memo(({ position, isSelected, onSelect, onPointerDown, objectId, globalAge=1, // Age doesn't affect car
+    bodyLength = 5, bodyWidth = 2, bodyHeight = 1.5,
+    roofHeight = 0.5, roofOffset = 0.1,
+    wheelRadius = 0.18, wheelWidth = 0.1,
+    color = "#B0C4DE" // Light Steel Blue
+}) => {
+    const wheelY = wheelRadius; // Place wheels touching ground
+    const bodyY = wheelRadius + bodyHeight / 2;
+    const roofY = wheelRadius + bodyHeight + roofHeight / 2;
+    const wheelOffsetX = bodyLength * 0.35;
+    const wheelOffsetZ = (bodyWidth / 2) + (wheelWidth / 2);
+
+    return (
+        <ObjectBase position={position} isSelected={isSelected} onSelect={onSelect} onPointerDown={onPointerDown} objectId={objectId} type="car">
+            {/* Body */}
+            <mesh position={[0, bodyY, 0]} castShadow receiveShadow>
+                <boxGeometry args={[bodyLength, bodyHeight, bodyWidth]} />
+                <meshStandardMaterial color={color} metalness={0.3} roughness={0.4}/>
+            </mesh>
+            {/* Roof */}
+            <mesh position={[roofOffset, roofY, 0]} castShadow receiveShadow>
+                 <boxGeometry args={[bodyLength * 0.6, roofHeight, bodyWidth * 0.9]} />
+                 <meshStandardMaterial color={color} metalness={0.3} roughness={0.4}/>
+            </mesh>
+             {/* Wheels */}
+             {[
+                {x: wheelOffsetX, z: wheelOffsetZ}, {x: wheelOffsetX, z: -wheelOffsetZ},
+                {x: -wheelOffsetX, z: wheelOffsetZ}, {x: -wheelOffsetX, z: -wheelOffsetZ}
+             ].map((pos, i) => (
+                 <mesh key={i} position={[pos.x, wheelY, pos.z]} rotation={[0, 0, Math.PI / 2]} castShadow receiveShadow>
+                    <cylinderGeometry args={[wheelRadius, wheelRadius, wheelWidth, 16]} />
+                    <meshStandardMaterial color="#333333" metalness={0.1} roughness={0.6}/>
+                </mesh>
+             ))}
+        </ObjectBase>
+    );
+});
+Car.editorSchema = [
+    { name: 'color', label: 'Color', type: 'color', defaultValue: "#B0C4DE" },
+    { name: 'bodyLength', label: 'Length', type: 'number', step: 0.1, min: 3, max: 6, defaultValue: 4.5 },
+    { name: 'bodyWidth', label: 'Width', type: 'number', step: 0.1, min: 1.5, max: 3, defaultValue: 1.8 },
+    { name: 'bodyHeight', label: 'Body Height', type: 'number', step: 0.05, min: 0.3, max: 1.0, defaultValue: 0.6 },
+    // Add other car params if needed (wheel size etc.)
+];
+
+// Garden Light
+export const GardenLight = React.memo(({ position, isSelected, onSelect, onPointerDown, objectId, globalAge=1, // Age unlikely to affect light
+    postHeight = 0.6, postDiameter = 0.04, fixtureRadius = 0.06,
+    lightColor = "#FFFFE0", // Light Yellow
+    lightIntensity = 1.5, // PointLight intensity
+    lightRange = 3.0 // PointLight distance/range
+}) => {
+    const lightFixtureY = postHeight + fixtureRadius * 0.5;
+    const pointLightY = postHeight + fixtureRadius * 0.2; // Position light source slightly below visual fixture top
+
+    return (
+        <ObjectBase position={position} isSelected={isSelected} onSelect={onSelect} onPointerDown={onPointerDown} objectId={objectId} type="garden_light">
+            {/* Post */}
+            <mesh position={[0, postHeight / 2, 0]} castShadow>
+                 <cylinderGeometry args={[postDiameter / 2, postDiameter / 2, postHeight, 8]} />
+                 <meshStandardMaterial color="#444444" metalness={0.6} roughness={0.4}/>
+            </mesh>
+            {/* Fixture */}
+             <mesh position={[0, lightFixtureY, 0]} castShadow>
+                 <sphereGeometry args={[fixtureRadius, 12, 8]} />
+                 <meshStandardMaterial color="#AAAAAA" metalness={0.3} roughness={0.5}/>
+            </mesh>
+            {/* Point Light Source */}
+            <pointLight
+                position={[0, pointLightY, 0]} // Position relative to the object group
+                color={lightColor}
+                intensity={lightIntensity}
+                distance={lightRange} // Range of the light
+                decay={2} // Realistic decay
+                castShadow={false} // Performance: disable shadows for small lights
+            />
+        </ObjectBase>
+    );
+});
+GardenLight.editorSchema = [
+    { name: 'postHeight', label: 'Post Height', type: 'number', step: 0.05, min: 0.2, max: 2.0, defaultValue: 0.6 },
+    { name: 'postDiameter', label: 'Post Ø', type: 'number', step: 0.01, min: 0.02, max: 0.15, defaultValue: 0.04 },
+    { name: 'fixtureRadius', label: 'Fixture Ø', type: 'number', step: 0.01, min: 0.03, max: 0.2, defaultValue: 0.06 },
+    { name: 'lightColor', label: 'Light Color', type: 'color', defaultValue: "#FFFFE0" },
+    { name: 'lightIntensity', label: 'Intensity', type: 'number', step: 0.1, min: 0, max: 5, defaultValue: 1.5 },
+    { name: 'lightRange', label: 'Range', type: 'number', step: 0.1, min: 0, max: 10, defaultValue: 3.0 },
+];
 
 // --- Map of Components and Schemas for easy lookup ---
 export const ObjectComponents = {
@@ -558,6 +752,12 @@ export const ObjectComponents = {
     deciduous_tree: DeciduousTree,
     shrub: Shrub,
     grass: Grass,
+    
+    hedge: Hedge,
+    stepping_stone: SteppingStone,
+    raised_bed: RaisedBed,
+    car: Car,
+    garden_light: GardenLight,
 };
 
     
@@ -566,6 +766,12 @@ export const ObjectEditorSchemas = {
     deciduous_tree: DeciduousTree.editorSchema,
     shrub: Shrub.editorSchema,
     grass: Grass.editorSchema,
+    
+    hedge: Hedge.editorSchema,
+    stepping_stone: SteppingStone.editorSchema,
+    raised_bed: RaisedBed.editorSchema,
+    car: Car.editorSchema,
+    garden_light: GardenLight.editorSchema,
 };
 
 export const objectConfigurations = [
@@ -633,4 +839,20 @@ export const objectConfigurations = [
         type: "grass",
         props: { bottomColor: "#8B8B5A", topColor: "#C4C482", colorRatio: 0.6, length: 0.2 }
     },
+    
+    
+    { name: "Long Hedge", type: "hedge", props: { length: 3.0, height: 0.7, color: "#2F4F2F" } },
+    { name: "Square Hedge", type: "hedge", props: { length: 0.8, width: 0.8, height: 0.6 } },
+    // Stepping Stones
+    { name: "Slate Stone", type: "stepping_stone", props: { diameter: 0.5, color: "#708090" } },
+    { name: "Sandstone", type: "stepping_stone", props: { diameter: 0.35, color: "#C19A6B" } },
+    // Raised Beds
+    { name: "Wooden Bed", type: "raised_bed", props: { length: 2.0, width: 0.6, height: 0.25, frameColor: "#A0522D", soilColor: "#6B4423" } },
+    { name: "Stone Bed", type: "raised_bed", props: { length: 1.2, width: 1.2, height: 0.4, frameColor: "#778899", soilColor: "#5C4033" } },
+    // Cars
+    { name: "Red Car", type: "car", props: { color: "#DC143C" } },
+    { name: "Blue Car", type: "car", props: { color: "#4682B4" } },
+    // Garden Lights
+    { name: "Post Light", type: "garden_light", props: {} },
+    { name: "Short Bollard", type: "garden_light", props: { postHeight: 0.3, lightIntensity: 1.0, lightRange: 2.0 } },
 ];

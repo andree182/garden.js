@@ -860,7 +860,7 @@ export default function PlanEditor() {
 
         return (
              <div style={{ borderTop: '1px solid #555', paddingTop: '8px', marginTop: '8px' }}>
-                <strong>Edit {selectedObjectProps.type} (ID: {selectedObjectProps.id})</strong>
+                <strong>Edit {selectedObjectProps.type.replace(/_/g,' ')} (ID: {selectedObjectProps.id})</strong>
                 {editorSchema.map(propInfo => {
                     let inputElement;
                     const currentValue = selectedObjectProps[propInfo.name] ?? propInfo.defaultValue;
@@ -1093,7 +1093,7 @@ export default function PlanEditor() {
                      <strong>Add Object:{selectedObjectToAdd?.name}</strong>
                      {Object.entries(groupedConfigurations).map(([type, configs]) => (
                          <div key={type} style={{ marginTop: '5px' }}>
-                             <strong style={{ textTransform: 'capitalize', display: 'block', marginBottom: '3px' }}>{type}s:</strong>
+                             <strong style={{ textTransform: 'capitalize', display: 'block', marginBottom: '3px' }}>{type.replace(/_/g, ' ')}s:</strong>
                              {configs.map((config) => (
                                  <button
                                      key={config.name}
