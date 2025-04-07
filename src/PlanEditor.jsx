@@ -745,10 +745,20 @@ export default function PlanEditor() {
         setCurrentGridSize({ w: w, h: h });
     };
 
-    const handlePropertyChange = (propName, value) => {
-        if (selectedObjectId === null || !selectedObjectProps) return; let parsedValue = value; const schema = ObjectEditorSchemas[selectedObjectProps.type]; const propInfo = schema?.find(p => p.name === propName);
-        if (propInfo?.type === 'number') { parsedValue = parseFloat(value); if (isNaN(parsedValue)) parsedValue = propInfo.defaultValue ?? propInfo.min ?? 0; parsedValue = Math.max(propInfo.min ?? -Infinity, Math.min(propInfo.max ?? Infinity, parsedValue)); }
-        sceneLogicRef.current?.updateObjectProperty(selectedObjectId, propName, parsedValue); setSelectedObjectProps(prevProps => ({ ...prevProps, [propName]: parsedValue }));
+    const handlePropertyChange = (propName, value, type) => {
+        if (selectedObjectId === null || !selectedObjectProps) return;
+        let parsedValue = value;
+        const schema = ObjectEditorSchemas[selectedObjectProps.type];
+        const propInfo = schema?.find(p => p.name === propName);
+        if (type === 'number' || propInfo?.type === 'number') {
+            parsedValue = parseFloat(value);
+            if (isNaN(parsedValue)) parsedValue = propInfo.defaultValue ?? propInfo.min ?? 0;
+            parsedValue = Math.max(propInfo.min ?? -Infinity, Math.min(propInfo.max ?? Infinity, parsedValue));
+        } else if (type === 'boolean') {
+            parsedValue = Boolean(value); // Convert checkbox value (usually 'on' or boolean)
+        }
+        sceneLogicRef.current?.updateObjectProperty(selectedObjectId, propName, parsedValue);
+        setSelectedObjectProps(prevProps => ({ ...prevProps, [propName]: parsedValue }));
     };
 
     const handleReset = () => {
@@ -840,23 +850,67 @@ export default function PlanEditor() {
     }, [currentMode, selectedObjectToAdd]);
 
     const renderPropertyEditors = () => {
-        if (!selectedObjectProps) return null; const editorSchema = ObjectEditorSchemas[selectedObjectProps.type];
-        if (!editorSchema) return (<div style={{ marginTop: '10px' }}>No editor defined for type: {selectedObjectProps.type}</div>);
-        const commonPropsStyle = { marginBottom: '5px' }; const labelStyle = { /* ... */ }; const inputStyle = { /* ... */ };
+        if (!selectedObjectProps) return null;
+        const editorSchema = ObjectEditorSchemas[selectedObjectProps.type];
+        if (!editorSchema)
+            return (<div style={{ marginTop: '10px' }}>No editor defined for type: {selectedObjectProps.type}</div>);
+        const commonPropsStyle = { marginBottom: '5px' };
+        
+        const labelStyle = { display: 'inline-block', width: '90px', marginRight: '5px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', verticalAlign: 'middle' };
+        const inputBaseStyle = { width: 'calc(100% - 100px)', boxSizing: 'border-box', verticalAlign: 'middle' };
+
         return (
              <div style={{ borderTop: '1px solid #555', paddingTop: '8px', marginTop: '8px' }}>
                 <strong>Edit {selectedObjectProps.type} (ID: {selectedObjectProps.id})</strong>
-                {editorSchema.map(propInfo => (
-                    <div key={propInfo.name} style={commonPropsStyle}>
-                        <label style={labelStyle} htmlFor={propInfo.name} title={propInfo.label}>{propInfo.label}:</label>
-                        <input
-                            style={inputStyle} id={propInfo.name} type={propInfo.type} step={propInfo.step} min={propInfo.min} max={propInfo.max}
-                            // Use current value OR schema defaultValue
-                            value={selectedObjectProps[propInfo.name] ?? propInfo.defaultValue}
-                            onChange={(e) => handlePropertyChange(propInfo.name, e.target.value)}
-                        />
-                    </div>
-                ))}
+                {editorSchema.map(propInfo => {
+                    let inputElement;
+                    const currentValue = selectedObjectProps[propInfo.name] ?? propInfo.defaultValue;
+
+                    if (propInfo.type === 'select') {
+                        inputElement = (
+                            <select
+                                style={{ ...inputBaseStyle, height: '21px' /* Match other inputs */}}
+                                id={propInfo.name}
+                                value={currentValue} // Bind to state/default
+                                onChange={(e) => handlePropertyChange(propInfo.name, e.target.value, 'select')} // Pass type hint if needed, value is string
+                            >
+                                {/* Map over options defined in the schema */}
+                                {propInfo.options?.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                            </select>
+                        );
+                    } else if (propInfo.type === 'boolean') { // NEW: Handle boolean as checkbox
+                         inputElement = (
+                            <input
+                                style={{ verticalAlign: 'middle', marginLeft: '5px' }} // Adjust style as needed
+                                id={propInfo.name}
+                                type="checkbox"
+                                checked={!!currentValue} // Ensure boolean conversion
+                                onChange={(e) => handlePropertyChange(propInfo.name, e.target.checked, 'boolean')} // Pass boolean value and type hint
+                            />
+                         );
+                    }
+                    else { // Handle 'number', 'color', text etc.
+                        inputElement = (
+                            <input
+                                style={inputBaseStyle}
+                                id={propInfo.name}
+                                type={propInfo.type} // Use type directly ('number', 'color', 'text')
+                                step={propInfo.step} // step, min, max primarily for type='number'
+                                min={propInfo.min}
+                                max={propInfo.max}
+                                value={currentValue} // Bind to state/default
+                                onChange={(e) => handlePropertyChange(propInfo.name, e.target.value, propInfo.type)} // Pass value and original type
+                            />
+                        );
+                    }
+
+                    return (
+                         <div key={propInfo.name} style={commonPropsStyle}>
+                            <label style={labelStyle} htmlFor={propInfo.name} title={propInfo.label}>{propInfo.label}:</label>
+                            {inputElement}
+                        </div>
+                    );
+                })}
             </div>
         );
     };
