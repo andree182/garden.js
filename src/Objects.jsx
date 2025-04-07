@@ -316,7 +316,6 @@ export const DeciduousTree = React.memo(({ position, isSelected, onSelect, onPoi
     // Fruit Properties
     fruitType = 'apple',
     fruitDensity = 30,
-    hasFruits = true,
 }) => {
 
     const fruitMeshRef = useRef();
@@ -327,7 +326,7 @@ export const DeciduousTree = React.memo(({ position, isSelected, onSelect, onPoi
     const isSpring = useMemo(() => currentMonth >= 3 && currentMonth <= 5, [currentMonth]); // Mar-May
     const isFall = useMemo(() => currentMonth >= 9 && currentMonth <= 11, [currentMonth]); // Sep-Nov
     const hasLeaves = !isWinter;
-    const showFruit = hasFruits && isFall;
+    const showFruit = useMemo(() => fruitType !== 'none' && isFall, [fruitType, isFall]);
 
     // --- Aged Dimensions ---
     const currentTrunkHeight = lerp(0.2, trunkHeight, globalAge);
@@ -545,7 +544,6 @@ DeciduousTree.editorSchema = [
     { name: 'foliageScaleXZ', label: 'Foliage Scale XZ', type: 'number', step: 0.05, min: 0.2, max: 2.0, defaultValue: 1.0 },
     { name: 'foliageScaleY', label: 'Foliage Scale Y', type: 'number', step: 0.05, min: 0.2, max: 2.0, defaultValue: 1.0 },
     { name: 'foliageOpacity', label: 'Foliage Opacity', type: 'number', step: 0.05, min: 0.1, max: 1.0, defaultValue: 0.85 },
-    { name: 'hasFruits', label: 'Show Fruits', type: 'boolean', defaultValue: true },
     { name: 'fruitDensity', label: 'Fruit Density', type: 'number', step: 1, min: 0, max: 100, defaultValue: 30 },
     { name: 'trunkColor', label: 'Trunk Clr', type: 'color', defaultValue: "#A0522D" },
     { name: 'branchColor', label: 'Branch Clr', type: 'color', defaultValue: null }, // Allow separate branch color
@@ -594,7 +592,7 @@ export const objectConfigurations = [
     { name: "Tall Pear Tree", type: "deciduous_tree", props: { fruitType: 'pear', foliageScaleY: 1.4, foliageScaleXZ: 0.8, trunkHeight: 1.5, branchDensity: 30 } },
     { name: "Plum Tree", type: "deciduous_tree", props: { fruitType: 'plum', foliageColor: "#8FBC8F" } },
     { name: "Oak Tree", type: "deciduous_tree", props: { trunkDiameter: 0.4, foliageDiameter: 2.5, fruitType: 'apple', fruitDensity: 5 } },    
-    { name: "Spreading Oak", type: "deciduous_tree", props: { trunkDiameter: 0.5, trunkHeight: 0.8, foliageScaleXZ: 1.6, foliageScaleY: 0.7, hasFruits: false, branchDensity: 50, branchLengthMax: 1.0, branchDiameter: 0.1 } },
+    { name: "Spreading Oak", type: "deciduous_tree", props: { trunkDiameter: 0.5, trunkHeight: 0.8, foliageScaleXZ: 1.6, foliageScaleY: 0.7, fruitType: 'none', branchDensity: 50, branchLengthMax: 1.0, branchDiameter: 0.1 } },
     {
         name: "Default Tree", // Keep the original default
         type: "tree",
@@ -610,7 +608,7 @@ export const objectConfigurations = [
             trunkColor: "#FFFFFF", branchColor: "#F0F0F0", // White/off-white
             foliageScaleY: 1.2, foliageScaleXZ: 0.9, // Slightly elongated foliage
             foliageColor: "#98FB98", // Pale green
-            hasFruits: false
+            fruitType: 'none'
         }
     },
     // Shrubs

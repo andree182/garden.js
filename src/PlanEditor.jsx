@@ -888,6 +888,25 @@ export default function PlanEditor() {
                                 onChange={(e) => handlePropertyChange(propInfo.name, e.target.checked, 'boolean')} // Pass boolean value and type hint
                             />
                          );
+                    } else if (propInfo.type === 'number') { // NEW: Handle number as slider + text display
+                        const min = propInfo.min ?? 0;
+                        const max = propInfo.max ?? 1;
+                        const step = propInfo.step ?? 0.01; // Default step if not provided
+                        inputElement = (
+                            <div style={{ display: 'flex', alignItems: 'center', width: 'calc(100% - 100px)'}}>
+                                <input
+                                    style={{ flexGrow: 1, marginRight: '5px', height: '18px' }} // Slider takes up space
+                                    id={propInfo.name}
+                                    type="range" // Use range type
+                                    min={min}
+                                    max={max}
+                                    step={step}
+                                    value={currentValue}
+                                    onChange={(e) => handlePropertyChange(propInfo.name, e.target.value, 'number')}
+                                />
+                                <span style={{ fontSize: '11px', minWidth: '25px', textAlign: 'right' }}>{Number(currentValue).toFixed(step < 0.1 ? 2 : (step < 1 ? 1 : 0) )}</span> {/* Display value */}
+                            </div>
+                          );
                     }
                     else { // Handle 'number', 'color', text etc.
                         inputElement = (
