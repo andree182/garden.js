@@ -571,6 +571,7 @@ function Experience({
     }, [draggingInfo, isPaintingTerrain, isPaintingColor, paintDirection, raycaster, camera, sceneLogicRef, paintColor, terrainPaintMode, absolutePaintHeight]);
 
     const handlePointerUp = useCallback((event) => {
+        console.log("Pointer up");
         const pointerId = event.pointerId;
 
         if (draggingInfo) { // A drag actually occurred
@@ -600,12 +601,10 @@ function Experience({
         if (draggingInfo || isPaintingTerrain || isPaintingColor) {
             domElement.addEventListener('pointermove', moveHandler);
             domElement.addEventListener('pointerup', upHandler);
-            domElement.addEventListener('pointerleave', upHandler); // End interaction if pointer leaves canvas
         }
         return () => {
             domElement.removeEventListener('pointermove', moveHandler);
             domElement.removeEventListener('pointerup', upHandler);
-            domElement.removeEventListener('pointerleave', upHandler);
             if (orbitControlsRef.current) orbitControlsRef.current.enabled = true; // Ensure re-enabled
         };
     }, [draggingInfo, isPaintingTerrain, isPaintingColor, handlePointerMove, handlePointerUp, gl]);
