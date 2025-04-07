@@ -12,6 +12,8 @@ const tempMatrix = new THREE.Matrix4(); // Reusable matrix for calculations
 const tempObject = new THREE.Object3D(); // Reusable object for matrix composition
 const tempColor = new THREE.Color(); // Reusable color object
 const tempVec = new THREE.Vector3();
+const tempQuaternion = new THREE.Quaternion();
+const Y_AXIS = new THREE.Vector3(0, 1, 0);
 
 // --- ObjectBase: Wrapper with common logic (selection, animation, pointer down) ---
 export const ObjectBase = ({ children, position, isSelected, onSelect, onPointerDown, objectId, type }) => {
@@ -292,27 +294,33 @@ Grass.editorSchema = [
     { name: 'colorRatio', label: 'Color Ratio', type: 'number', step: 0.05, min: 0.05, max: 1, defaultValue: 0.5 },
 ];
 
-const MAX_TRUNKS = 10;
+const MAX_BRANCHES = 10;
 const MAX_FRUITS = 50;
 
 export const DeciduousTree = React.memo(({ position, isSelected, onSelect, onPointerDown, objectId, globalAge = 1, currentMonth = 6,
-    // Editable properties with defaults
+   // Trunk Properties
     trunkHeight = 1.0,
     trunkDiameter = 0.25,
-    numTrunks = 1,
-    trunkSpread = 0.1,
-    branchColor = null,
-    trunkColor = "#A0522D", // Sienna
-    foliageDiameter = 1.8,
-    foliageColor = "#559040", // Default summer green
+    trunkColor = "#A0522D",
+    // Branch Properties
+    branchDensity = 40,  // Controls number of side branches
+    branchLengthMax = 0.8, // Max length relative to foliage size
+    branchDiameter = 0.08,
+    branchColor = null,  // Optional different color (null uses trunkColor)
+    // Foliage Properties
+    foliageDiameter = 1.8, // Base diameter used for XZ scale
+    foliageScaleXZ = 1.0, // Multiplier for X/Z foliage shape (1.0 = sphere)
+    foliageScaleY = 1.0,  // Multiplier for Y foliage shape (1.0 = sphere)
+    foliageColor = "#559040",
     foliageOpacity = 0.85,
-    fruitType = 'apple', // 'apple', 'pear', 'plum'
-    fruitDensity = 30, // Lower density default for fruits
+    // Fruit Properties
+    fruitType = 'apple',
+    fruitDensity = 30,
     hasFruits = true,
 }) => {
 
     const fruitMeshRef = useRef();
-    const trunkMeshRef = useRef();
+    const branchMeshRef = useRef();
 
     // --- Seasonal Calculations ---
     const isWinter = useMemo(() => currentMonth >= 12 || currentMonth <= 2, [currentMonth]); // Dec-Feb
@@ -324,9 +332,12 @@ export const DeciduousTree = React.memo(({ position, isSelected, onSelect, onPoi
     // --- Aged Dimensions ---
     const currentTrunkHeight = lerp(0.2, trunkHeight, globalAge);
     const currentTrunkDiameter = lerp(0.05, trunkDiameter, globalAge);
-    const currentFoliageDiameter = lerp(0.3, foliageDiameter, globalAge);
-    const foliageRadius = currentFoliageDiameter / 2;
-    const foliageCenterY = currentTrunkHeight + foliageRadius * 0.8;
+    // Base radius for calculating bounds, before scaling
+    const baseFoliageRadius = foliageDiameter / 2;
+    const currentFoliageRadiusXZ = lerp(0.15, baseFoliageRadius * foliageScaleXZ, globalAge);
+    const currentFoliageRadiusY = lerp(0.15, baseFoliageRadius * foliageScaleY, globalAge);
+    const currentBranchLengthMax = lerp(0.1, branchLengthMax, globalAge);
+    const currentBranchDiameter = lerp(0.01, branchDiameter, globalAge);
 
     // --- Foliage Appearance ---
     const currentFoliageColor = useMemo(() => {
@@ -334,67 +345,85 @@ export const DeciduousTree = React.memo(({ position, isSelected, onSelect, onPoi
         if (isFall) return "#FFA500"; // Orange/Yellow
         return foliageColor; // Summer or default
     }, [isSpring, isFall, foliageColor]);
+    const foliageCenterY = currentTrunkHeight * 0.8 + currentFoliageRadiusY;
 
-    const [trunkGeometry, trunkMaterial] = useMemo(() => {
-        // Use a single cylinder geometry for all instances
-        // Use diameter for radius calculation: radiusTop, radiusBottom, height
-        const geom = new THREE.CylinderGeometry(trunkDiameter * 0.4, trunkDiameter * 0.5, 1, 8); // Height=1 for scaling
+        // --- Branch Geometry & Material ---
+    const [branchGeometry, branchMaterial] = useMemo(() => {
+        // Cylinder: radiusTop, radiusBottom, height, radialSegments
+        const geom = new THREE.CylinderGeometry(branchDiameter * 0.5, branchDiameter * 0.7, 1, 5); // Height=1 for scaling
         geom.translate(0, 0.5, 0); // Pivot at bottom center
-        const mat = new THREE.MeshStandardMaterial({ color: trunkColor }); // Base material with default trunk color
+        const mat = new THREE.MeshStandardMaterial({ color: branchColor || trunkColor });
         return [geom, mat];
-    }, [trunkDiameter, trunkColor]); // Recreate if base diameter/color changes
+    }, [branchDiameter, branchColor, trunkColor]); // Recreate if base diameter/colors change
 
-    const trunkCount = useMemo(() => Math.min(MAX_TRUNKS, Math.max(1, numTrunks)), [numTrunks]);
-    const effectiveBranchColor = useMemo(() => branchColor || trunkColor, [branchColor, trunkColor]);
-    
+    // --- Branch Instancing ---
+    const branchCount = useMemo(() => {
+        // Density relates to approximate foliage surface area
+        const approxSurfaceArea = 4 * Math.PI * Math.pow((currentFoliageRadiusXZ + currentFoliageRadiusY) / 2, 2); // Avg radius sphere area
+        return Math.min(MAX_BRANCHES, Math.max(0, Math.floor(branchDensity * approxSurfaceArea * 0.5))); // Adjust multiplier
+    }, [branchDensity, currentFoliageRadiusXZ, currentFoliageRadiusY]);
+
     useLayoutEffect(() => {
-        if (!trunkMeshRef.current || !trunkGeometry) return;
-        const mesh = trunkMeshRef.current;
+        if (!branchMeshRef.current || !branchGeometry || branchCount === 0) return;
+        const mesh = branchMeshRef.current;
 
-        for (let i = 0; i < trunkCount; i++) {
-            tempObject.position.set(0, 0, 0);
-            tempObject.rotation.set(0, 0, 0);
-            tempObject.scale.set(1, currentTrunkHeight, 1); // Scale height
-            tempObject.quaternion.identity();
+        // Branches start near the top part of the trunk
+        const branchStartY = currentTrunkHeight * 0.7;
+        const branchHeightRange = currentTrunkHeight * 0.25; // Vertical range along trunk where branches originate
 
-            // Apply spread and slight tilt if multiple trunks
-            if (trunkCount > 1) {
-                const angle = (i / trunkCount) * Math.PI * 2 + (Math.random() * 0.5 - 0.25); // Add randomness
-                const spreadRadius = trunkSpread * lerp(0.5, 1.0, Math.random()); // Randomize spread slightly
-                const xOffset = Math.cos(angle) * spreadRadius * currentTrunkDiameter; // Offset based on diameter
-                const zOffset = Math.sin(angle) * spreadRadius * currentTrunkDiameter;
-                tempObject.position.x = xOffset;
-                tempObject.position.z = zOffset;
+        for (let i = 0; i < branchCount; i++) {
+            // --- Starting Position on Trunk ---
+            const yStart = branchStartY + Math.random() * branchHeightRange;
+            // Slight offset from center for start point (less for thinner trunks)
+            const startOffsetRadius = currentTrunkDiameter * 0.1 * Math.random();
+            const startAngle = Math.random() * Math.PI * 2;
+            const xStart = Math.cos(startAngle) * startOffsetRadius;
+            const zStart = Math.sin(startAngle) * startOffsetRadius;
+            tempObject.position.set(xStart, yStart, zStart);
 
-                // Add slight outward tilt
-                const tiltAngle = lerp(0.05, 0.15, Math.random()) * (trunkCount / MAX_TRUNKS); // More tilt for more trunks?
-                const tiltAxis = new THREE.Vector3(-zOffset, 0, xOffset).normalize();
-                 if (tiltAxis.lengthSq() > 0.001) {
-                    const quaternionTilt = new THREE.Quaternion().setFromAxisAngle(tiltAxis, tiltAngle);
-                    tempObject.quaternion.multiply(quaternionTilt);
-                 }
-            }
+            // --- Direction & Length ---
+            // Point towards a random spot on the surface of the scaled foliage ellipsoid
+            const phi = Math.acos(2 * Math.random() - 1); // Elevation angle
+            const theta = Math.random() * Math.PI * 2;   // Azimuth angle
+
+            // Calculate point on surface of ellipsoid (radius varies with angle phi)
+            const sinPhi = Math.sin(phi);
+            const cosPhi = Math.cos(phi);
+            const rXZ = currentFoliageRadiusXZ; // Radius in XZ plane at height y
+            const rY = currentFoliageRadiusY;   // Radius along Y axis
+
+            // Simplified target point calculation (can be improved for perfect ellipsoid)
+            const targetX = rXZ * sinPhi * Math.cos(theta);
+            const targetY = rY * cosPhi; // Relative to foliage center
+            const targetZ = rXZ * sinPhi * Math.sin(theta);
+
+            // Direction vector from branch start to target point (relative to tree origin)
+            const direction = tempVec.set(targetX, targetY + foliageCenterY - yStart, targetZ).normalize();
+
+            // Calculate length: extend towards target, max length based on prop, add randomness
+            const branchLength = currentBranchLengthMax * (0.6 + Math.random() * 0.4);
+            tempObject.scale.set(1, branchLength, 1); // Scale height
+
+            // --- Rotation ---
+            // Align branch (Y-axis of geometry) with the calculated direction
+            tempObject.quaternion.setFromUnitVectors(Y_AXIS, direction);
+            // Add slight random roll around branch axis (optional)
+            const rollAngle = Math.random() * Math.PI * 0.2 - Math.PI * 0.1;
+            tempQuaternion.setFromAxisAngle(direction, rollAngle);
+            tempObject.quaternion.multiply(tempQuaternion);
+
 
             // --- Update Matrix ---
             tempObject.updateMatrix();
             mesh.setMatrixAt(i, tempObject.matrix);
-
-            // --- Set Color (Optional Per-Instance) ---
-            // This requires material.vertexColors = false and overriding the color attribute buffer directly
-            // Or using specific libraries. For simplicity, we'll just set the material color if needed.
-            // If numTrunks > 1 and branchColor is different, we might need separate InstancedMeshes or more complex material handling.
-            // For now, let's assume all instances use the same material color (or branchColor overrides trunkColor globally).
         }
-        mesh.count = trunkCount; // Set rendered count
+        mesh.count = branchCount;
         mesh.instanceMatrix.needsUpdate = true;
         mesh.computeBoundingSphere();
+        // Update material color
+        if (mesh.material) { mesh.material.color.set(branchColor || trunkColor); }
 
-        // Update material color if branchColor is set and differs
-        if (mesh.material) {
-            mesh.material.color.set(effectiveBranchColor);
-        }
-
-    }, [trunkCount, currentTrunkHeight, currentTrunkDiameter, trunkSpread, trunkGeometry, effectiveBranchColor]);
+    }, [branchCount, currentTrunkHeight, currentTrunkDiameter, currentFoliageRadiusXZ, currentFoliageRadiusY, foliageCenterY, currentBranchLengthMax, branchGeometry, branchColor, trunkColor]); // Dependencies
 
     // --- Fruit Appearance ---
     const [fruitGeometry, fruitMaterial, fruitScale] = useMemo(() => {
@@ -426,69 +455,71 @@ export const DeciduousTree = React.memo(({ position, isSelected, onSelect, onPoi
 
     // --- Fruit Instancing ---
     const fruitCount = useMemo(() => {
-        if (!showFruit) return 0;
-        // Density relates to foliage volume (approx sphere volume)
-        const volume = (4/3) * Math.PI * Math.pow(foliageRadius, 3);
-        return Math.min(MAX_FRUITS, Math.max(0, Math.floor(fruitDensity * volume * 0.5))); // Adjust multiplier
-    }, [showFruit, fruitDensity, foliageRadius]);
+        // Only calculate if fruits should be shown based on props and season
+         if (!showFruit) return 0;
 
-    useLayoutEffect(() => {
-        if (!showFruit || !fruitMeshRef.current || fruitCount === 0) {
-            return;
-        }
+         // Approximate the volume of the foliage ellipsoid
+         // Volume of ellipsoid = (4/3) * PI * a * b * c
+         // Here, a = c = currentFoliageRadiusXZ, b = currentFoliageRadiusY
+         const volume = (4 / 3) * Math.PI * currentFoliageRadiusXZ * currentFoliageRadiusY * currentFoliageRadiusXZ;
 
+         // Calculate count based on density and volume
+         // Adjust the final multiplier (e.g., 0.5) to get the desired visual density
+         const calculatedCount = Math.floor(fruitDensity * volume * 0.5);
+
+         // Clamp the count between 0 and MAX_FRUITS
+         return Math.min(MAX_FRUITS, Math.max(0, calculatedCount));
+
+    // Depend on parameters affecting fruit presence and volume
+    }, [showFruit, fruitDensity, currentFoliageRadiusXZ, currentFoliageRadiusY]);
+
+    useLayoutEffect(() => { // Fruit position effect
+        if (!showFruit || !fruitMeshRef.current || fruitCount === 0) { if(fruitMeshRef.current) fruitMeshRef.current.count = 0; return; };
         const mesh = fruitMeshRef.current;
 
         for (let i = 0; i < fruitCount; i++) {
-            // Position randomly within the foliage sphere volume *relative to origin*
-            const lambda = Math.random();
-            const phi = Math.acos(2 * Math.random() - 1);
-            const theta = Math.random() * Math.PI * 2;
-            const surfaceOffsetFactor = 0.85 + Math.random() * 0.2; // e.g., between 90% and 110% of radius
-            const r = foliageRadius * surfaceOffsetFactor;
-            tempVec.setFromSphericalCoords(r, phi, theta);
+            // Position randomly near the surface of the foliage ellipsoid
+            const phi = Math.acos(2 * Math.random() - 1); const theta = Math.random() * Math.PI * 2;
+            // Point on surface
+            const rSurfaceXZ = currentFoliageRadiusXZ;
+            const rSurfaceY = currentFoliageRadiusY;
+            const xSurf = rSurfaceXZ * Math.sin(phi) * Math.cos(theta);
+            const ySurf = rSurfaceY * Math.cos(phi);
+            const zSurf = rSurfaceXZ * Math.sin(phi) * Math.sin(theta);
+             // Add slight random offset inwards/outwards from surface
+             const offsetFactor = 1.0 + (Math.random() * 0.2 - 0.1); // e.g., 0.9 to 1.1
 
             tempObject.position.set(
-                tempVec.x,
-                tempVec.y + foliageCenterY, // Add offset here
-                tempVec.z
+                xSurf * offsetFactor,
+                ySurf * offsetFactor + foliageCenterY, // Offset from foliage center
+                zSurf * offsetFactor
             );
 
             tempObject.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
-            tempObject.scale.setScalar(fruitScale); // Use calculated fruit scale
-
-            tempObject.updateMatrix();
-            mesh.setMatrixAt(i, tempObject.matrix);
+            tempObject.scale.setScalar(fruitScale);
+            tempObject.updateMatrix(); mesh.setMatrixAt(i, tempObject.matrix);
         }
-        mesh.count = fruitCount;
-        mesh.instanceMatrix.needsUpdate = true;
-        mesh.computeBoundingSphere();
+        mesh.count = fruitCount; mesh.instanceMatrix.needsUpdate = true; mesh.computeBoundingSphere();
 
-    }, [showFruit, fruitCount, foliageRadius, foliageCenterY, fruitGeometry, fruitScale]); // Re-run if fruit appears/disappears or size changes
-
+    }, [showFruit, fruitCount, currentFoliageRadiusXZ, currentFoliageRadiusY, foliageCenterY, fruitGeometry, fruitScale]); // Use scaled radii
 
     return (
         <ObjectBase position={position} isSelected={isSelected} onSelect={onSelect} onPointerDown={onPointerDown} objectId={objectId} type="deciduous_tree">
-            {/* Trunk */}
-            <instancedMesh
-                 ref={trunkMeshRef}
-                 args={[trunkGeometry, trunkMaterial, trunkCount]} // Use count
-                 castShadow
-                 receiveShadow
-             />
+            {/* Single Main Trunk */}
+            <mesh position={[0, currentTrunkHeight / 2, 0]} scale={[currentTrunkDiameter / trunkDiameter || 0.01, currentTrunkHeight / trunkHeight || 0.01, currentTrunkDiameter / trunkDiameter || 0.01]} castShadow>
+                <cylinderGeometry args={[trunkDiameter * 0.4, trunkDiameter * 0.5, trunkHeight, 8]} />
+                <meshStandardMaterial color={trunkColor} />
+            </mesh>
 
-            {/* Foliage - represented as a sphere */}
+            {branchCount > 0 && (
+                 <instancedMesh ref={branchMeshRef} args={[branchGeometry, branchMaterial, branchCount]} castShadow receiveShadow />
+            )}
+
+            {/* Foliage - Scaled sphere (ellipsoid) */}
             {hasLeaves && (
-                 <mesh position={[0, foliageCenterY, 0]} scale={currentFoliageDiameter} castShadow> {/* Use foliageCenterY */}
-                    <sphereGeometry args={[0.5, 16, 12]} />
-                    <meshStandardMaterial
-                        color={currentFoliageColor}
-                        roughness={0.8}
-                        metalness={0.1}
-                        transparent={true} // Enable transparency
-                        opacity={foliageOpacity} // Use opacity prop
-                        depthWrite={foliageOpacity > 0.95} // Turn off depth write for significant transparency
-                        />
+                 <mesh position={[0, foliageCenterY, 0]} scale={[currentFoliageRadiusXZ*2, currentFoliageRadiusY*2, currentFoliageRadiusXZ*2]} castShadow> {/* Scale sphere geometry */}
+                    <sphereGeometry args={[0.5, 12, 8]} />{/* Base radius 0.5 */}
+                    <meshStandardMaterial color={currentFoliageColor} roughness={0.8} metalness={0.1} transparent={true} opacity={foliageOpacity} depthWrite={foliageOpacity > 0.95} />
                 </mesh>
             )}
              {/* Fruits - Instanced Mesh */}
@@ -507,16 +538,19 @@ export const DeciduousTree = React.memo(({ position, isSelected, onSelect, onPoi
 DeciduousTree.editorSchema = [
     { name: 'trunkHeight', label: 'Trunk H', type: 'number', step: 0.1, min: 0.2, max: 5, defaultValue: 1.0 },
     { name: 'trunkDiameter', label: 'Trunk Ø', type: 'number', step: 0.05, min: 0.05, max: 1.5, defaultValue: 0.25 },
-    { name: 'numTrunks', label: '# Trunks', type: 'number', step: 1, min: 1, max: MAX_TRUNKS, defaultValue: 1 },
-    { name: 'trunkSpread', label: 'Trunk Spread', type: 'number', step: 0.05, min: 0, max: 1, defaultValue: 0.1 }, 
-    { name: 'foliageDiameter', label: 'Foliage Ø', type: 'number', step: 0.1, min: 0.3, max: 6, defaultValue: 1.8 },
+    { name: 'branchDensity', label: 'Branch Density', type: 'number', step: 1, min: 0, max: 100, defaultValue: 40 },
+    { name: 'branchLengthMax', label: 'Branch Length', type: 'number', step: 0.05, min: 0.1, max: 1.5, defaultValue: 0.8 },
+    { name: 'branchDiameter', label: 'Branch Ø', type: 'number', step: 0.01, min: 0.01, max: 0.5, defaultValue: 0.08 },
+    { name: 'foliageDiameter', label: 'Foliage Base Ø', type: 'number', step: 0.1, min: 0.3, max: 6, defaultValue: 1.8 },
+    { name: 'foliageScaleXZ', label: 'Foliage Scale XZ', type: 'number', step: 0.05, min: 0.2, max: 2.0, defaultValue: 1.0 },
+    { name: 'foliageScaleY', label: 'Foliage Scale Y', type: 'number', step: 0.05, min: 0.2, max: 2.0, defaultValue: 1.0 },
     { name: 'foliageOpacity', label: 'Foliage Opacity', type: 'number', step: 0.05, min: 0.1, max: 1.0, defaultValue: 0.85 },
     { name: 'hasFruits', label: 'Show Fruits', type: 'boolean', defaultValue: true },
     { name: 'fruitDensity', label: 'Fruit Density', type: 'number', step: 1, min: 0, max: 100, defaultValue: 30 },
     { name: 'trunkColor', label: 'Trunk Clr', type: 'color', defaultValue: "#A0522D" },
-    { name: 'branchColor', label: 'Branch Clr', type: 'color', defaultValue: null },
-    { name: 'foliageColor', label: 'Summer Clr', type: 'color', defaultValue: "#559040" }, // Base summer color
-    { name: 'fruitType', label: 'Fruit Type', type: 'select', options: ['apple', 'pear', 'plum'], defaultValue: 'apple' },
+    { name: 'branchColor', label: 'Branch Clr', type: 'color', defaultValue: null }, // Allow separate branch color
+    { name: 'foliageColor', label: 'Summer Clr', type: 'color', defaultValue: "#559040" },
+    { name: 'fruitType', label: 'Fruit Type', type: 'select', options: ['apple', 'pear', 'plum', 'none'], defaultValue: 'apple' },
 ];
 
 
@@ -557,21 +591,26 @@ export const objectConfigurations = [
     },
     { name: "Apple Tree", type: "deciduous_tree", props: { fruitType: 'apple', foliageColor: "#6B8E23" } },
     { name: "Pear Tree", type: "deciduous_tree", props: { fruitType: 'pear', foliageDiameter: 2.2, trunkHeight: 1.2 } },
+    { name: "Tall Pear Tree", type: "deciduous_tree", props: { fruitType: 'pear', foliageScaleY: 1.4, foliageScaleXZ: 0.8, trunkHeight: 1.5, branchDensity: 30 } },
     { name: "Plum Tree", type: "deciduous_tree", props: { fruitType: 'plum', foliageColor: "#8FBC8F" } },
-    { name: "Oak Tree", type: "deciduous_tree", props: { trunkDiameter: 0.4, foliageDiameter: 2.5, fruitType: 'apple', fruitDensity: 5 } },
+    { name: "Oak Tree", type: "deciduous_tree", props: { trunkDiameter: 0.4, foliageDiameter: 2.5, fruitType: 'apple', fruitDensity: 5 } },    
+    { name: "Spreading Oak", type: "deciduous_tree", props: { trunkDiameter: 0.5, trunkHeight: 0.8, foliageScaleXZ: 1.6, foliageScaleY: 0.7, hasFruits: false, branchDensity: 50, branchLengthMax: 1.0, branchDiameter: 0.1 } },
     {
         name: "Default Tree", // Keep the original default
         type: "tree",
         props: {} // Will use all defaults from schema
     },
     {
-        name: "Birch Tree",
+        name: "Birch", // Keep the multi-trunk feel via branches
         type: "deciduous_tree",
         props: {
-            numTrunks: 3, trunkSpread: 0.3, trunkHeight: 1.8, trunkDiameter: 0.15,
-            trunkColor: "#FFFFFF", branchColor: "#F5F5F5", // White/off-white
-            foliageDiameter: 1.5, foliageColor: "#98FB98", // Pale green
-            hasFruits: false // Birch trees don't have these kinds of fruits
+            // Removed numTrunks/trunkSpread
+            branchDensity: 60, branchLengthMax: 0.9, branchDiameter: 0.06, // More, longer, thinner branches
+            trunkHeight: 1.8, trunkDiameter: 0.18, // Slightly taller/thinner main trunk
+            trunkColor: "#FFFFFF", branchColor: "#F0F0F0", // White/off-white
+            foliageScaleY: 1.2, foliageScaleXZ: 0.9, // Slightly elongated foliage
+            foliageColor: "#98FB98", // Pale green
+            hasFruits: false
         }
     },
     // Shrubs
