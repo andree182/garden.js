@@ -1,7 +1,7 @@
 // src/PlanEditor.jsx
 import React, { useState, useMemo, useCallback, useRef, forwardRef, useImperativeHandle, useEffect } from 'react';
 import { Canvas, useThree, useFrame } from '@react-three/fiber';
-import { OrbitControls, PerspectiveCamera, Box, Plane, Text } from '@react-three/drei';
+import { OrbitControls, PerspectiveCamera, OrthographicCamera, Box, Plane, Text } from '@react-three/drei';
 import * as THREE from 'three';
 
 // Import object components AND their editor schemas
@@ -444,7 +444,7 @@ function Experience({
     globalAge, brushSize, // Props for rendering/API
     sceneLogicRef, onSelectObject, onInteractionEnd, getInitialObjectId, showCoordinates, paintColor, sunAzimuth, sunElevation,
     terrainPaintMode, absolutePaintHeight,
-    currentMonth
+    currentMonth, isOrthographic
 }) {
     const { raycaster, pointer, camera, gl } = useThree();
     const orbitControlsRef = useRef();
@@ -613,7 +613,27 @@ function Experience({
     console.log("[Experience] Received showCoordinates:", showCoordinates);
     return (
         <>
-            <PerspectiveCamera makeDefault position={[15, 20, 25]} fov={60} />
+            {/* Conditionally Render Cameras */}
+            {isOrthographic ? (
+                <OrthographicCamera
+                    makeDefault
+                    position={[0, 50, 0]} // Position directly above center
+                    zoom={50} // Adjust initial zoom level (smaller value = more zoomed in)
+                    near={0.1}
+                    far={1000}
+                    // Rotation is implicitly handled by position/lookAt for top-down
+                    // left={-aspect * frustumSize / 2} // Can calculate based on viewport size if needed
+                    // right={aspect * frustumSize / 2}
+                    // top={frustumSize / 2}
+                    // bottom={-frustumSize / 2}
+                />
+            ) : (
+                <PerspectiveCamera
+                    makeDefault
+                    position={[15, 20, 25]} // Default perspective position
+                    fov={60}
+                />
+            )}
             <SceneWithLogic
                 ref={sceneLogicRef} selectedObjectId={selectedObjectId} globalAge={globalAge} brushSize={brushSize}
                 onObjectSelect={onSelectObject} onObjectPointerDown={handleObjectPointerDown} onGridPointerDown={handleGridPointerDown} showCoordinates={showCoordinates}
@@ -650,6 +670,7 @@ export default function PlanEditor() {
     const [clipboard, setClipboard] = useState(null); // For copy-paste
     const [showAddObjectList, setShowAddObjectList] = useState(false);
     const [selectedObjectToAdd, setSelectedObjectToAdd] = useState(null);
+    const [isOrthographic, setIsOrthographic] = useState(false);
     const [sunAzimuth, setSunAzimuth] = useState(45); // Default: Northeast-ish
     const [sunElevation, setSunElevation] = useState(60); // Default: Fairly high sun
     const [currentMonth, setCurrentMonth] = useState(6);
@@ -766,6 +787,7 @@ export default function PlanEditor() {
             sceneLogicRef.current?.resetState(); // Trigger reset in SceneLogic
             handleInteractionEnd(); // Reset UI mode/selection
         }
+        setIsOrthographic(false);
     };
 
     // --- Keyboard Shortcuts Handler ---
@@ -1063,6 +1085,12 @@ export default function PlanEditor() {
                  <div style={{ marginBottom: '8px', borderTop: '1px solid #555', paddingTop: '8px' }}>
                      <strong>Global Age:</strong> {globalAge.toFixed(2)}<br/> <input type="range" min="0" max="1" step="0.01" value={globalAge} onChange={(e) => setGlobalAge(parseFloat(e.target.value))} style={{ width: '100%' }} />
                  </div>
+                 <div style={{ marginBottom: '8px', borderTop: '1px solid #555', paddingTop: '8px' }}>
+                     <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                         <input type="checkbox" checked={isOrthographic} onChange={(e) => setIsOrthographic(e.target.checked)} style={{ marginRight: '5px' }}/>
+                         Orthographic View
+                     </label>
+                 </div>
 
                  {/* Sun Position Controls */}
                  <div style={{ marginBottom: '8px', borderTop: '1px solid #555', paddingTop: '8px' }}>
@@ -1155,6 +1183,7 @@ export default function PlanEditor() {
                          sunElevation={sunElevation} // Pass down sun state
                          terrainPaintMode={terrainPaintMode} absolutePaintHeight={absolutePaintHeight} 
                          currentMonth={currentMonth}
+                         isOrthographic={isOrthographic}
                     />
                 </Canvas>
             </div>
