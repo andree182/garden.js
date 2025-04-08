@@ -84,7 +84,7 @@ const SceneWithLogic = forwardRef(({
     selectedObjectId, globalAge, brushSize, // Props
     onObjectSelect, onObjectPointerDown, onGridPointerDown, onInteractionEnd,
     showCoordinates, sunAzimuth, sunElevation, terrainPaintMode, absolutePaintHeight,
-    currentMonth
+    currentMonth, showObjectNames
 }, ref) => {
     const sanitizeObjectsArray = (arr) => Array.isArray(arr) ? arr.filter(obj => obj && typeof obj === 'object' && obj.id != null) : [];
     const CURRENT_SAVE_VERSION = 5;
@@ -261,7 +261,7 @@ const SceneWithLogic = forwardRef(({
                 baseObj.worldX = baseObj.worldX ?? 0;
                 baseObj.worldZ = baseObj.worldZ ?? 0;
                 baseObj.rotationY = baseObj.rotationY ?? 0;
-                console.log(baseObj.rotationY);
+                baseObj.name = baseObj.name ?? config?.name ?? baseObj.type;
                 return baseObj;
              });
             setObjects(processedObjects);
@@ -299,13 +299,16 @@ const SceneWithLogic = forwardRef(({
         addObject: (newObjectData) => {
             const defaults = {}; const schema = ObjectEditorSchemas[newObjectData.type];
             if (schema) { schema.forEach(propInfo => { defaults[propInfo.name] = propInfo.defaultValue ?? (propInfo.type === 'color' ? '#CCCCCC' : (propInfo.min ?? 0.5)); }); }
-            const fullData = { ...defaults, ...newObjectData };
-            setObjects(prev => [...prev, fullData]);
+            const configName = newObjectData.configName || newObjectData.type; // Get original config name if passed
+            const name = newObjectData.name || configName;
+            const fullData = { ...defaults, ...newObjectData, name };
+            setObjects(prev => [...sanitizeObjectsArray(prevUnsafe), fullData]);
         },
         removeObject: (id) => { setObjects(prev => prev.filter(obj => obj.id !== id)); },
         updateObjectPositionWorld: (id, newWorldX, newWorldZ) => {
             setObjects(prev => prev.map(obj => (obj && (obj.id === id)) ? { ...obj, worldX: newWorldX, worldZ: newWorldZ } : obj ));
         },
+        getObjects: () => [...objects],
         getObjectProperties: (id) => {
             const obj = objects.find(o => o != null && o.id === id);
             return obj ? { ...obj } : null;
@@ -331,15 +334,53 @@ const SceneWithLogic = forwardRef(({
     }, [heightData, colorData, gridWidth, gridHeight, onGridPointerDown]);
 
     const renderedObjects = useMemo(() => {
-         if (gridWidth === 0 || gridHeight === 0) return [];
          return objects.map(obj => {
-            if (!obj)
-                return null;
-            const ObjectComponent = ObjectComponents[obj.type]; if (!ObjectComponent) return null;
-            const groundHeight = getGroundHeightAtWorld(obj.worldX, obj.worldZ); const worldYBase = getWorldYBase(groundHeight); const position = [obj.worldX, worldYBase, obj.worldZ];
-            return ( <ObjectComponent key={obj.id} objectId={obj.id} position={position} isSelected={obj.id === selectedObjectId} onSelect={() => onObjectSelect(obj.id)} onPointerDown={onObjectPointerDown} globalAge={globalAge} currentMonth={currentMonth} {...obj} /> );
+            if (!obj) return null; // Handle potential nulls after sanitization fail? Should not happen.
+            const ObjectComponent = ObjectComponents[obj.type];
+            if (!ObjectComponent) { console.warn(`Unknown object type: ${obj.type}`); return null; }
+            const groundHeight = getGroundHeightAtWorld(obj.worldX, obj.worldZ);
+            const worldYBase = getWorldYBase(groundHeight);
+            const position = [obj.worldX, worldYBase, obj.worldZ];
+
+            // Calculate approximate height for name tag positioning
+            // This is rough, depends on object type. Could be improved.
+            let objectHeight = 1.0; // Default height
+            if (obj.type === 'tree' || obj.type === 'deciduous_tree') objectHeight = (obj.trunkHeight || 1) + (obj.maxFoliageHeight || obj.foliageDiameter || 1) * 0.5;
+            else if (obj.type === 'hedge') objectHeight = obj.height || 0.8;
+            else if (obj.type === 'small_flower') objectHeight = obj.stemHeight || 0.15;
+            else if (obj.type === 'garden_light') objectHeight = obj.postHeight || 0.6;
+            else objectHeight = obj.height || obj.bushHeight || obj.bodyHeight || 0.5; // Guess for others
+
+            const nameYOffset = objectHeight * 1.1 + 0.2; // Position above the object
+
+            return (
+                // Wrap object and potential name tag in a group if needed,
+                // but rendering Text directly might be okay performance-wise for moderate counts
+                <React.Fragment key={obj.id}>
+                    <ObjectComponent
+                        objectId={obj.id} position={position} isSelected={obj.id === selectedObjectId}
+                        onSelect={() => onObjectSelect(obj.id)} onPointerDown={onObjectPointerDown}
+                        globalAge={globalAge} currentMonth={currentMonth}
+                        {...obj} // Pass all props including name, rotationY etc.
+                    />
+                    {/* Conditionally render Name Tag */}
+                    {showObjectNames && (
+                        <Text
+                            position={[position[0], position[1] + nameYOffset, position[2]]} // Position above object base + offset
+                            fontSize={0.25}
+                            color="#FFF"
+                            anchorX="center"
+                            anchorY="middle"
+                            outlineWidth={0.02}
+                            outlineColor="#000"
+                        >
+                            {obj.name || obj.type} {/* Show name or fallback to type */}
+                        </Text>
+                    )}
+                </React.Fragment>
+            );
         })
-    }, [objects, selectedObjectId, globalAge, onObjectSelect, onObjectPointerDown, getGroundHeightAtWorld, gridWidth, gridHeight, currentMonth]);
+    }, [objects, selectedObjectId, globalAge, currentMonth, onObjectSelect, onObjectPointerDown, getGroundHeightAtWorld, showObjectNames]);
 
     // --- Coordinate Labels ---
     const coordinateLabels = useMemo(() => {
@@ -446,7 +487,7 @@ function Experience({
     globalAge, brushSize, // Props for rendering/API
     sceneLogicRef, onSelectObject, onInteractionEnd, getInitialObjectId, showCoordinates, paintColor, sunAzimuth, sunElevation,
     terrainPaintMode, absolutePaintHeight,
-    currentMonth, isOrthographic
+    currentMonth, isOrthographic, showObjectNames
 }) {
     const { raycaster, pointer, camera, gl } = useThree();
     const orbitControlsRef = useRef();
@@ -495,6 +536,8 @@ function Experience({
              const newObjectData = {
                  id: getInitialObjectId(),
                  type: selectedObjectToAdd.type,
+                 name: selectedObjectToAdd.name,
+                 configName: selectedObjectToAdd.name,
                  worldX,
                  worldZ,
                  ...selectedObjectToAdd.props // Spread the predefined properties
@@ -641,7 +684,7 @@ function Experience({
                 onObjectSelect={onSelectObject} onObjectPointerDown={handleObjectPointerDown} onGridPointerDown={handleGridPointerDown} showCoordinates={showCoordinates}
                 onInteractionEnd={onInteractionEnd} sunAzimuth={sunAzimuth} sunElevation={sunElevation} // Pass down for Add/Resize
                 terrainPaintMode={terrainPaintMode} absolutePaintHeight={absolutePaintHeight}
-                currentMonth={currentMonth}
+                currentMonth={currentMonth} showObjectNames={showObjectNames}
             />
             {draggingInfo && (<Plane ref={dragPlaneRef} args={[10000, 10000]} rotation={[-Math.PI / 2, 0, 0]} position={[0, draggingInfo.initialY, 0]} visible={false} />)}
             {/* Disable controls only when actually dragging or painting */}
@@ -673,6 +716,7 @@ export default function PlanEditor() {
     const [showAddObjectList, setShowAddObjectList] = useState(false);
     const [selectedObjectToAdd, setSelectedObjectToAdd] = useState(null);
     const [isOrthographic, setIsOrthographic] = useState(false);
+    const [showObjectNames, setShowObjectNames] = useState(false);
     const [sunAzimuth, setSunAzimuth] = useState(45); // Default: Northeast-ish
     const [sunElevation, setSunElevation] = useState(60); // Default: Fairly high sun
     const [currentMonth, setCurrentMonth] = useState(6);
@@ -767,7 +811,7 @@ export default function PlanEditor() {
         setCurrentGridSize({ w: w, h: h });
     };
 
-    const handlePropertyChange = (propName, value, type) => {
+    const handlePropertyChange = (propName, value, type = 'text') => {
         if (selectedObjectId === null || !selectedObjectProps) return;
         let parsedValue = value;
         const schema = ObjectEditorSchemas[selectedObjectProps.type];
@@ -885,6 +929,16 @@ export default function PlanEditor() {
         return (
              <div style={{ borderTop: '1px solid #555', paddingTop: '8px', marginTop: '8px' }}>
                 <strong>Edit {selectedObjectProps.type.replace(/_/g,' ')} (ID: {selectedObjectProps.id})</strong>
+                <div key="name-editor" style={commonPropsStyle}>
+                     <label style={labelStyle} htmlFor="objectName" title="Name">Name:</label>
+                     <input
+                        style={inputBaseStyle}
+                        id="objectName"
+                        type="text"
+                        value={selectedObjectProps.name || ''} // Use current name
+                        onChange={(e) => handlePropertyChange('name', e.target.value, 'text')} // Update name prop
+                     />
+                 </div>
                 {editorSchema.map(propInfo => {
                     let inputElement;
                     const currentValue = selectedObjectProps[propInfo.name] ?? propInfo.defaultValue;
@@ -1018,6 +1072,54 @@ export default function PlanEditor() {
         );
     };
 
+     const handleExportObjectList = useCallback(() => {
+        const allObjects = sceneLogicRef.current?.getObjects();
+        if (!allObjects || allObjects.length === 0) {
+            alert("No objects to export.");
+            return;
+        }
+
+        // Group by name
+        const grouped = allObjects.reduce((acc, obj) => {
+            if (!obj) return acc; // Skip null/undefined objects
+            const name = obj.name || obj.type; // Use name or fallback to type
+            if (!acc[name]) {
+                acc[name] = { count: 0, coordinates: [] };
+            }
+            acc[name].count++;
+            // Store coords rounded to reasonable precision
+            acc[name].coordinates.push([
+                parseFloat(obj.worldX.toFixed(3)),
+                parseFloat((obj.worldY ?? sceneLogicRef.current?.getGroundHeightAtWorld(obj.worldX, obj.worldZ) ?? 0).toFixed(3)), // Get Y if needed
+                parseFloat(obj.worldZ.toFixed(3))
+            ]);
+            return acc;
+        }, {});
+
+        // Format for export
+        const exportData = Object.entries(grouped).map(([name, data]) => ({
+            name: name,
+            count: data.count,
+            positions: data.coordinates, // Rename field to 'positions'
+        }));
+
+        // Trigger download
+        try {
+            const jsonString = JSON.stringify(exportData, null, 2);
+            const blob = new Blob([jsonString], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'object_list_export.json';
+            document.body.appendChild(a); a.click(); document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } catch (error) {
+            console.error("Failed to export object list:", error);
+            alert("Failed to generate export file.");
+        }
+
+    }, []); // Depends only on sceneLogicRef
+
     // --- Effect for Global Key Listener ---
     useEffect(() => {
         console.log("Attaching keydown listener");
@@ -1036,6 +1138,7 @@ export default function PlanEditor() {
                     <button onClick={onLoadClick} style={getButtonStyle('load')}>Load</button>
                     <button onClick={onSaveClick} style={getButtonStyle('save')}>Save</button>
                     <button onClick={handleReset} style={getButtonStyle('reset')}>Reset</button>
+                    <button onClick={handleExportObjectList} style={getButtonStyle('export')}>Export List</button>
                     <button onClick={handleRemoveSelected} disabled={selectedObjectId === null} style={getButtonStyle('remove', selectedObjectId === null)}>Remove</button>
 
                  { /* console.log("[PlanEditor] Rendering with showCoordinates:", showCoordinates) */ }
@@ -1091,6 +1194,9 @@ export default function PlanEditor() {
                      <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
                          <input type="checkbox" checked={isOrthographic} onChange={(e) => setIsOrthographic(e.target.checked)} style={{ marginRight: '5px' }}/>
                          Orthographic View
+                     </label>
+                      <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                         <input type="checkbox" checked={showObjectNames} onChange={(e) => setShowObjectNames(e.target.checked)} style={{ marginRight: '5px' }}/> Names
                      </label>
                  </div>
 
@@ -1186,6 +1292,7 @@ export default function PlanEditor() {
                          terrainPaintMode={terrainPaintMode} absolutePaintHeight={absolutePaintHeight} 
                          currentMonth={currentMonth}
                          isOrthographic={isOrthographic}
+                         showObjectNames={showObjectNames}
                     />
                 </Canvas>
             </div>
