@@ -6,6 +6,9 @@ import { Shrub } from './Shrub';
 import { Grass } from './Grass';
 import { DeciduousTree } from './DeciduousTree';
 import { Hedge } from './Hedge';
+import { SmallFruitBush } from './SmallFruitBush';
+import { GroundFruit } from './GroundFruit';
+import { SmallFlower } from './SmallFlower';
 import { SteppingStone } from './SteppingStone';
 import { RectSteppingStone } from './RectSteppingStone';
 import { RaisedBed } from './RaisedBed';
@@ -25,6 +28,9 @@ export const ObjectComponents = {
     shrub: Shrub,
     grass: Grass,
     hedge: Hedge,
+    small_fruit_bush: SmallFruitBush,
+    ground_fruit: GroundFruit,
+    ground_flower: SmallFlower,
     stepping_stone: SteppingStone,
     rect_stepping_stone: SteppingStone,
     raised_bed: RaisedBed,
@@ -42,6 +48,9 @@ export const ObjectEditorSchemas = {
     shrub: Shrub.editorSchema,
     grass: Grass.editorSchema,
     hedge: Hedge.editorSchema,
+    small_fruit_bush: SmallFruitBush.editorSchema,
+    small_flower: SmallFlower.editorSchema,
+    ground_fruit: GroundFruit.editorSchema, 
     stepping_stone: SteppingStone.editorSchema,
     rect_stepping_stone: RectSteppingStone.editorSchema,
     raised_bed: RaisedBed.editorSchema,

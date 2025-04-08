@@ -52,6 +52,22 @@ export const objectConfigurations = [
         type: "shrub",
         props: { maxRadius: 0.6, color: "#556B2F" }
     },
+    // Small Fruit Bushes
+    { name: "Blueberry Bush", type: "small_fruit_bush", props: { bushDiameter: 0.7, bushHeight: 0.6, fruitColor: "#4682B4", fruitSize: 0.01, fruitDensity: 200, fruitPresenceMonths: [7, 8] } },
+    { name: "Raspberry Bush", type: "small_fruit_bush", props: { bushDiameter: 0.5, bushHeight: 0.8, flattenBottom: 0.1, fruitColor: "#E30B5D", fruitSize: 0.012, fruitDensity: 150, fruitPresenceMonths: [7, 8, 9] } },
+    { name: "Red Currant", type: "small_fruit_bush", props: { bushDiameter: 0.6, bushHeight: 0.7, fruitColor: "#C81D11", fruitSize: 0.008, fruitDensity: 250, fruitPresenceMonths: [7] } },
+    { name: "Gooseberry Bush", type: "small_fruit_bush", props: { bushDiameter: 0.8, bushHeight: 0.6, flattenBottom: 0.3, foliageColor: "#90EE90", fruitColor: "#BFFF00", fruitSize: 0.02, fruitDensity: 100, fruitPresenceMonths: [7, 8] } },
+
+    // Ground Fruit
+    { name: "Strawberry Patch", type: "ground_fruit", props: {} }, // Use defaults
+    { name: "Alpine Strawberry", type: "ground_fruit", props: { patchDiameter: 0.3, fruitColor: "#FF4500", fruitSize: 0.01, fruitDensity: 120, leafDensity: 100 } },
+
+    // Small Flowers
+    { name: "Pink Flowers", type: "small_flower", props: { flowerColor: "#FFB6C1", patchDiameter: 0.5, density: 180 } }, // Light Pink
+    { name: "Tulips (Red)", type: "small_flower", props: { flowerColor: "#FF0000", flowerShape: 'cone', flowerSize: 0.04, stemHeight: 0.25, patchDiameter: 0.3, density: 80, bloomMonths: [4,5] } },
+    { name: "Lavender Patch", type: "small_flower", props: { flowerColor: "#E6E6FA", flowerShape: 'cone', flowerSize: 0.015, stemHeight: 0.2, patchDiameter: 0.6, density: 200, stemColor: "#B0C4DE", bloomMonths: [6,7,8] } },
+    { name: "Coneflowers", type: "small_flower", props: { flowerColor: "#DA70D6", flowerShape: 'cone', flowerSize: 0.05, stemHeight: 0.3, patchDiameter: 0.4, density: 70, bloomMonths: [7,8,9] } }, // Orchid color
+
     // Grass
     {
         name: "Default Grass",
