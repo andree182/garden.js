@@ -5,7 +5,7 @@ import { OrbitControls, PerspectiveCamera, OrthographicCamera, Box, Plane, Text 
 import * as THREE from 'three';
 
 // Import object components AND their editor schemas
-import { ObjectComponents, ObjectEditorSchemas, objectConfigurations } from './Objects.jsx';
+import { ObjectComponents, ObjectEditorSchemas, objectConfigurations } from './objects';
 
 const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -257,10 +257,12 @@ const SceneWithLogic = forwardRef(({
                          }
                      });
                  }
-                  // Ensure core position exists
-                  baseObj.worldX = baseObj.worldX ?? 0;
-                  baseObj.worldZ = baseObj.worldZ ?? 0;
-                 return baseObj;
+                // Ensure core position exists
+                baseObj.worldX = baseObj.worldX ?? 0;
+                baseObj.worldZ = baseObj.worldZ ?? 0;
+                baseObj.rotationY = baseObj.rotationY ?? 0;
+                console.log(baseObj.rotationY);
+                return baseObj;
              });
             setObjects(processedObjects);
             const maxId = processedObjects.reduce((max, obj) => Math.max(max, obj.id || 0), 0);
