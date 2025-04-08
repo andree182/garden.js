@@ -302,7 +302,7 @@ const SceneWithLogic = forwardRef(({
             const configName = newObjectData.configName || newObjectData.type; // Get original config name if passed
             const name = newObjectData.name || configName;
             const fullData = { ...defaults, ...newObjectData, name };
-            setObjects(prev => [...sanitizeObjectsArray(prevUnsafe), fullData]);
+            setObjects(prev => [...prev, fullData]);
         },
         removeObject: (id) => { setObjects(prev => prev.filter(obj => obj.id !== id)); },
         updateObjectPositionWorld: (id, newWorldX, newWorldZ) => {
