@@ -79,28 +79,39 @@ export const Grass = React.memo(({ position, isSelected, onSelect, onPointerDown
 
         const colors = geometry.attributes.color.array;
         const positions = geometry.attributes.position.array;
-        const bColor = tempColor.set(seasonalBottomColor);
-        const tColor = tempColor.set(seasonalTopColor);
-        const finalColor = new THREE.Color();
+        const bColor = new THREE.Color(seasonalBottomColor);
+        const tColor = new THREE.Color(seasonalTopColor);
         const vertexCount = geometry.attributes.position.count;
 
-        for (let i = 0; i < vertexCount; i++) {
-            const yPosIndex = i * 3 + 1; // Index for the Y coordinate
-            // Normalized Y position (0 at bottom, 1 at top because base geometry height is 1)
-            const normalizedY = positions[yPosIndex];
+        // Clamp colorRatio to avoid division by zero or invalid ranges
+        const ratio = Math.max(0.01, Math.min(0.99, colorRatio)); // TODO: doesn't do anything
 
-            // Adjust lerp factor based on colorRatio (power makes transition sharper/softer)
-            const lerpFactor = Math.pow(normalizedY, 1.0 / (Math.max(0.1, colorRatio)));
+        for (let vertexIndex = 0; vertexIndex < vertexCount; vertexIndex++) {
+            const positionIndex = vertexIndex * 3;
+            const yPosIndex = positionIndex + 1;
+            const normalizedY = positions[yPosIndex]; // 0 (bottom) to 1 (top)
+
+            let lerpFactor;
+            if (normalizedY < ratio) {
+                lerpFactor = (normalizedY / ratio) * 0.5;
+            } else {
+                lerpFactor = 0.5 + ((normalizedY - ratio) / (1 - ratio)) * 0.5;
+            }
+            // Final clamp
+            lerpFactor = Math.max(0, Math.min(1, lerpFactor));
+
+            const finalColor = new THREE.Color();
             finalColor.lerpColors(bColor, tColor, lerpFactor);
 
-            const colorIndex = i * 3;
+            const colorIndex = vertexIndex * 3;
             colors[colorIndex] = finalColor.r;
             colors[colorIndex + 1] = finalColor.g;
             colors[colorIndex + 2] = finalColor.b;
+
+            // const logColor = `(${finalColor.r.toFixed(2)}, ${finalColor.g.toFixed(2)}, ${finalColor.b.toFixed(2)})`;
+            // if (vertexIndex < 4) console.log(`Vertex ${vertexIndex}: Y=${normalizedY.toFixed(2)}, Lerp=${lerpFactor.toFixed(2)}, Color=${logColor}`);
         }
         geometry.attributes.color.needsUpdate = true;
-        // console.log("Updated grass vertex colors");
-
     }, [geometry, seasonalBottomColor, seasonalTopColor, colorRatio]);
 
 
