@@ -5,7 +5,7 @@ import { OrbitControls, PerspectiveCamera, OrthographicCamera, Box, Plane, Text 
 import * as THREE from 'three';
 
 // Import object components AND their editor schemas
-import { ObjectComponents, ObjectEditorSchemas, objectConfigurations } from './objects';
+import { ObjectComponents, objectConfigurations } from './objects';
 
 const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -103,7 +103,7 @@ const SceneWithLogic = forwardRef(({
 
         const hData = defaultHeightData;
         const defaultObjects = initialGridObjects.map(obj => {
-            const defaults = {}; const schema = ObjectEditorSchemas[obj.type];
+            const defaults = {}; const schema = ObjectComponents[obj.type].editorSchema;
             if (schema) { schema.forEach(propInfo => { defaults[propInfo.name] = propInfo.defaultValue; }); }
              const groundHeight = hData[obj.gridZ]?.[obj.gridX] ?? 0;
              const [worldX, , worldZ] = gridToWorldCenter(obj.gridX, obj.gridZ, groundHeight, INITIAL_GRID_WIDTH, INITIAL_GRID_HEIGHT);
@@ -249,7 +249,7 @@ const SceneWithLogic = forwardRef(({
             const processedObjects = loadedData.objects.map(obj => {
                  let baseObj = { ...obj };
                  // Add defaults based on SCHEMAS for robustness
-                 const schema = ObjectEditorSchemas[baseObj.type];
+                 const schema = ObjectComponents[baseObj.type].editorSchema;
                  if (schema) {
                      schema.forEach(propInfo => {
                          if (baseObj[propInfo.name] === undefined) {
@@ -297,7 +297,7 @@ const SceneWithLogic = forwardRef(({
             // Autosave will trigger due to state change
         },
         addObject: (newObjectData) => {
-            const defaults = {}; const schema = ObjectEditorSchemas[newObjectData.type];
+            const defaults = {}; const schema = ObjectComponents[newObjectData.type].editorSchema;
             if (schema) { schema.forEach(propInfo => { defaults[propInfo.name] = propInfo.defaultValue ?? (propInfo.type === 'color' ? '#CCCCCC' : (propInfo.min ?? 0.5)); }); }
             const configName = newObjectData.configName || newObjectData.type; // Get original config name if passed
             const name = newObjectData.name || configName;
@@ -814,7 +814,7 @@ export default function PlanEditor() {
     const handlePropertyChange = (propName, value, type = 'text') => {
         if (selectedObjectId === null || !selectedObjectProps) return;
         let parsedValue = value;
-        const schema = ObjectEditorSchemas[selectedObjectProps.type];
+        const schema = ObjectComponents[selectedObjectProps.type].editorSchema;
         const propInfo = schema?.find(p => p.name === propName);
         if (type === 'number' || propInfo?.type === 'number') {
             parsedValue = parseFloat(value);
@@ -918,7 +918,7 @@ export default function PlanEditor() {
 
     const renderPropertyEditors = () => {
         if (!selectedObjectProps) return null;
-        const editorSchema = ObjectEditorSchemas[selectedObjectProps.type];
+        const editorSchema = ObjectComponents[selectedObjectProps.type].editorSchema;
         if (!editorSchema)
             return (<div style={{ marginTop: '10px' }}>No editor defined for type: {selectedObjectProps.type}</div>);
         const commonPropsStyle = { marginBottom: '5px' };
@@ -1272,7 +1272,7 @@ export default function PlanEditor() {
                     zIndex: 10 // Ensure it's above canvas, potentially adjust if overlaps other UI
                 }}
             >
-                =&amp; GitHub
+                GitHub/garden.js
             </a>
 
             <input type="file" ref={fileInputRef} onChange={onFileSelected} accept=".json,application/json" style={{ display: 'none' }} />

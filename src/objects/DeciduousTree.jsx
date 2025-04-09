@@ -16,8 +16,8 @@ const tempVec = new THREE.Vector3();
 const tempQuaternion = new THREE.Quaternion();
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
 
-const MAX_BRANCHES = 10;
-const MAX_FRUITS = 50;
+const MAX_BRANCHES = 20;
+const MAX_FRUITS = 500;
 
 export const DeciduousTree = React.memo(({ position, isSelected, onSelect, onPointerDown, objectId, globalAge = 1, currentMonth = 6,
    // Trunk Properties

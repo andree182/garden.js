@@ -32,33 +32,13 @@ export const ObjectComponents = {
     ground_fruit: GroundFruit,
     ground_flower: SmallFlower,
     stepping_stone: SteppingStone,
-    rect_stepping_stone: SteppingStone,
+    rect_stepping_stone: RectSteppingStone,
     raised_bed: RaisedBed,
     car: Car,
     garden_light: GardenLight,
     pergola: Pergola,
     gravel_patch: GravelPatch,
     house: House,
-};
-
-// Create the schema map
-export const ObjectEditorSchemas = {
-    tree: Tree.editorSchema,
-    deciduous_tree: DeciduousTree.editorSchema,
-    shrub: Shrub.editorSchema,
-    grass: Grass.editorSchema,
-    hedge: Hedge.editorSchema,
-    small_fruit_bush: SmallFruitBush.editorSchema,
-    small_flower: SmallFlower.editorSchema,
-    ground_fruit: GroundFruit.editorSchema, 
-    stepping_stone: SteppingStone.editorSchema,
-    rect_stepping_stone: RectSteppingStone.editorSchema,
-    raised_bed: RaisedBed.editorSchema,
-    car: Car.editorSchema,
-    garden_light: GardenLight.editorSchema,
-    pergola: Pergola.editorSchema,
-    gravel_patch: GravelPatch.editorSchema,
-    house: House.editorSchema,
 };
 
 // Re-export configurations

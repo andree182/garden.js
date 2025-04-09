@@ -17,7 +17,7 @@ const tempQuaternion = new THREE.Quaternion();
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
 
 // --- NEW Grass Component using InstancedMesh ---
-const MAX_GRASS_BLADES = 100; // Performance limit
+const MAX_GRASS_BLADES = 500; // Performance limit
 
 export const Grass = React.memo(({ position, isSelected, onSelect, onPointerDown, objectId, globalAge = 1,
     // Parameters with defaults
@@ -60,8 +60,7 @@ export const Grass = React.memo(({ position, isSelected, onSelect, onPointerDown
 
     // Calculate instance count based on density
     const count = useMemo(() => {
-        const area = Math.PI * (baseDiameter / 2) ** 2;
-        return Math.min(MAX_GRASS_BLADES, Math.max(1, Math.floor(density * area * 150))); // Adjust multiplier for visual density
+        return MAX_GRASS_BLADES * density / 100; // Adjust multiplier for visual density
     }, [density, baseDiameter]);
 
     const [seasonalBottomColor, seasonalTopColor] = useMemo(() => {
@@ -170,7 +169,7 @@ export const Grass = React.memo(({ position, isSelected, onSelect, onPointerDown
 Grass.editorSchema = [
     { name: 'baseDiameter', label: 'Diameter', type: 'number', step: 0.05, min: 0.1, max: 2.0, defaultValue: 0.5 },
     { name: 'length', label: 'Length', type: 'number', step: 0.05, min: 0.05, max: 1.5, defaultValue: 0.3 },
-    { name: 'density', label: 'Density', type: 'number', step: 5, min: 5, max: 200, defaultValue: 50 },
+    { name: 'density', label: 'Density', type: 'number', step: 5, min: 5, max: 100, defaultValue: 50 },
     { name: 'straightness', label: 'Straightness', type: 'number', step: 0.05, min: 0, max: 1, defaultValue: 0.7 },
     { name: 'bottomColor', label: 'Bottom Clr', type: 'color', defaultValue: "#224411" },
     { name: 'topColor', label: 'Top Clr', type: 'color', defaultValue: "#66AA44" },

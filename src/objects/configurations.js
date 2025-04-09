@@ -80,12 +80,8 @@ export const objectConfigurations = [
         props: { bottomColor: "#8B8B5A", topColor: "#C4C482", colorRatio: 0.6, length: 0.2 }
     },
     
-    
     { name: "Long Hedge", type: "hedge", props: { length: 3.0, height: 0.7, color: "#2F4F2F" } },
     { name: "Square Hedge", type: "hedge", props: { length: 0.8, width: 0.8, height: 0.6 } },
-    // Stepping Stones
-    { name: "Slate Stone", type: "stepping_stone", props: { diameter: 0.5, color: "#708090" } },
-    { name: "Sandstone", type: "stepping_stone", props: { diameter: 0.35, color: "#C19A6B" } },
     // Raised Beds
     { name: "Wooden Bed", type: "raised_bed", props: { length: 2.0, width: 0.6, height: 0.25, frameColor: "#A0522D", soilColor: "#6B4423" } },
     { name: "Stone Bed", type: "raised_bed", props: { length: 1.2, width: 1.2, height: 0.4, frameColor: "#778899", soilColor: "#5C4033" } },
@@ -97,6 +93,9 @@ export const objectConfigurations = [
     { name: "Short Bollard", type: "garden_light", props: { postHeight: 0.3, lightIntensity: 1.0, lightRange: 2.0 } },
     
         // Rectangular Stones
+    // Stepping Stones
+    { name: "Slate Stone", type: "stepping_stone", props: { diameter: 0.5, color: "#708090" } },
+    { name: "Sandstone", type: "stepping_stone", props: { diameter: 0.35, color: "#C19A6B" } },
     { name: "Paver Stone", type: "rect_stepping_stone", props: { length: 0.6, width: 0.4, color: "#A9A9A9" } },
     { name: "Flagstone Slab", type: "rect_stepping_stone", props: { length: 0.8, width: 0.5, height: 0.06, color: "#778899" } },
 
