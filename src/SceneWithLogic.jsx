@@ -13,11 +13,26 @@ export const SceneWithLogic = forwardRef(
         },
         ref
     ) => {
-        const sanitizeObjectsArray = (arr) => Array.isArray(arr)
-            ? arr.filter(
-                (obj) => obj && typeof obj === "object" && obj.id != null
-            )
-            : [];
+        const sanitizeObjectsArray = (arr) => {
+            if (!Array.isArray(arr)) {
+              return [];
+            }
+          
+            const filteredArr = arr.filter(
+              (obj) => obj && typeof obj === "object" && obj.id != null
+            );
+          
+            let currentId = 1;
+          
+            const resultArr = filteredArr.map((obj) => {
+              const newObj = { ...obj };
+              newObj.id = currentId;
+              currentId++;
+              return newObj;
+            });
+          
+            return resultArr;
+          };
         const CURRENT_SAVE_VERSION = 5;
 
         const generateDefaultState = () => {
@@ -362,7 +377,6 @@ export const SceneWithLogic = forwardRef(
                     const maxWorldX = (newWidth / 2) * CELL_SIZE;
                     const minWorldZ = (-newHeight / 2) * CELL_SIZE;
                     const maxWorldZ = (newHeight / 2) * CELL_SIZE;
-                    prev = sanitizeObjectsArray(prev);
                     setObjects((prev) => prev.filter(
                         (obj) => obj.worldX >= minWorldX &&
                             obj.worldX < maxWorldX &&
