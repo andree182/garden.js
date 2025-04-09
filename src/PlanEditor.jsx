@@ -654,8 +654,6 @@ function Experience({
         };
     }, [draggingInfo, isPaintingTerrain, isPaintingColor, handlePointerMove, handlePointerUp, gl]);
 
-     
-    console.log("[Experience] Received showCoordinates:", showCoordinates);
     return (
         <>
             {/* Conditionally Render Cameras */}
@@ -723,10 +721,10 @@ export default function PlanEditor() {
 
     const getNextObjectId = useCallback(() => nextObjectId++, []);
 
-    const getButtonStyle = (modeOrAction, disabled = false, isSelectedToAdd = false) => ({
+    const getButtonStyle = (highlight = false, disabled = false) => ({
         margin: '2px', padding: '4px 8px',
-        border: (currentMode === modeOrAction || isSelectedToAdd) ? '2px solid #eee' : '1px solid #777', // Highlight active mode OR selected config
-        backgroundColor: disabled ? '#666' : ((currentMode === modeOrAction || isSelectedToAdd) ? '#555' : '#333'),
+        border: highlight ? '2px solid #eee' : '1px solid #777', // Highlight active mode OR selected config
+        backgroundColor: disabled ? '#666' : highlight ? '#555' : '#333',
         color: disabled ? '#aaa' : 'white', cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.6 : 1,
         display: 'block', // Make add buttons stack vertically
         width: 'calc(100% - 10px)', // Adjust width for block display
@@ -777,7 +775,7 @@ export default function PlanEditor() {
         } else {
             // Select this config for placement
             setSelectedObjectToAdd(config);
-            setCurrentMode('placing'); // Special mode indicates user should click terrain
+            setCurrentMode('place'); // Special mode indicates user should click terrain
             setSelectedObjectId(null); // Deselect any 3D object
             console.log("Selected configuration for placement:", config.name);
         }
@@ -846,17 +844,13 @@ export default function PlanEditor() {
                 console.log("ESC: Deselecting");
                 handleSelectObject(null); // Use the existing handler
             }
-            if (currentMode === 'placing') {
+            if (currentMode === 'place') {
                 console.log("ESC: Cancelling add object placement");
                 setSelectedObjectToAdd(null);
                 setCurrentMode('select');
             } else if (currentMode === 'terrain' || currentMode === 'paint-color') {
                 handleSetMode('select');
             }
-            // Potentially cancel other interactions like add mode?
-            // if (currentMode.startsWith('add-')) {
-            //     handleSetMode('select');
-            // }
         }
 
         // --- Delete ---
@@ -911,7 +905,7 @@ export default function PlanEditor() {
             case 'select': return "Click object to select/edit properties. Drag selected object to move.";
             case 'terrain': return "Click/Drag grid to modify height (Shift=Lower). Esc to exit.";
             case 'paint-color': return "Click/Drag grid to paint color. Esc to exit.";
-            case 'placing': return `Click terrain to place '${selectedObjectToAdd?.name || ''}'. Click config again or Esc to cancel.`;
+            case 'place': return `Click terrain to place '${selectedObjectToAdd?.name || ''}'. Click config again or Esc to cancel.`;
             default: return "Select a mode.";
         }
     }, [currentMode, selectedObjectToAdd]);
@@ -1135,20 +1129,20 @@ export default function PlanEditor() {
              {/* UI Overlay - Update Mode Buttons */}
              <div style={{ position: 'absolute', top: '10px', left: '10px', zIndex: 1, color: 'white', background: 'rgba(0,0,0,0.8)', padding: '10px', borderRadius: '5px', fontSize: '12px', width: '220px', maxHeight: 'calc(100vh - 20px)', overflowY: 'auto', boxSizing: 'border-box' }}>
                 <strong>Actions:</strong><br/>
-                    <button onClick={onLoadClick} style={getButtonStyle('load')}>Load</button>
-                    <button onClick={onSaveClick} style={getButtonStyle('save')}>Save</button>
-                    <button onClick={handleReset} style={getButtonStyle('reset')}>Reset</button>
-                    <button onClick={handleExportObjectList} style={getButtonStyle('export')}>Export List</button>
-                    <button onClick={handleRemoveSelected} disabled={selectedObjectId === null} style={getButtonStyle('remove', selectedObjectId === null)}>Remove</button>
+                    <button onClick={onLoadClick} style={getButtonStyle()}>Load</button>
+                    <button onClick={onSaveClick} style={getButtonStyle()}>Save</button>
+                    <button onClick={handleReset} style={getButtonStyle()}>Reset</button>
+                    <button onClick={handleExportObjectList} style={getButtonStyle()}>Export List</button>
+                    <button onClick={handleRemoveSelected} style={getButtonStyle(false, selectedObjectId === null)}>Remove</button>
 
                  { /* console.log("[PlanEditor] Rendering with showCoordinates:", showCoordinates) */ }
                  <div style={{ marginBottom: '8px' }}>
                      <strong>Mode:</strong><br/>
                      {/* Explicit Mode Buttons */}
-                     <button style={getButtonStyle('placing')} onClick={() => handleSetMode('placing')}>Place</button>
-                     <button style={getButtonStyle('select')} onClick={() => handleSetMode('select')}>Select/Move</button>
-                     <button style={getButtonStyle('terrain')} onClick={() => handleSetMode('terrain')}>Edit Terrain</button>
-                     <button style={getButtonStyle('paint-color')} onClick={() => handleSetMode('paint-color')}>Paint Color</button>
+                     <button style={getButtonStyle(currentMode =='place')} onClick={() => handleSetMode('place')}>Place</button>
+                     <button style={getButtonStyle(currentMode =='select')} onClick={() => handleSetMode('select')}>Select/Move</button>
+                     <button style={getButtonStyle(currentMode =='terrain')} onClick={() => handleSetMode('terrain')}>Edit Terrain</button>
+                     <button style={getButtonStyle(currentMode =='paint-color')} onClick={() => handleSetMode('paint-color')}>Paint Color</button>
                  </div>
                  {/* ... Actions, Grid Resize, Brush Size (only relevant in terrain mode?), Aging Slider ... */}
                  <div style={{ marginBottom: '8px', borderTop: '1px solid #555', paddingTop: '8px', display: currentMode === 'terrain' ? 'block' : 'none' }}>
@@ -1166,7 +1160,7 @@ export default function PlanEditor() {
                         <input type="number" value={desiredWidth} onChange={(e) => setDesiredWidth(e.target.value)} min={MIN_GRID_DIM} max={MAX_GRID_DIM} style={{ width: '40px', marginRight: '3px' }}/>
                         x
                         <input type="number" value={desiredHeight} onChange={(e) => setDesiredHeight(e.target.value)} min={MIN_GRID_DIM} max={MAX_GRID_DIM} style={{ width: '40px', marginLeft: '3px', marginRight: '5px' }}/>
-                        <button onClick={handleResize} style={getButtonStyle('resize')}>Resize</button>
+                        <button onClick={handleResize} style={getButtonStyle()}>Resize</button>
                     </div>
                  </div>
                  <div style={{ marginBottom: '8px', borderTop: '1px solid #555', paddingTop: '8px', display: currentMode === 'paint-color' ? 'block' : 'none' }}>
@@ -1225,15 +1219,15 @@ export default function PlanEditor() {
                      />
                  </div>
 
-                 <div style={{ borderTop: '1px solid #555', paddingTop: '8px', marginTop: '8px', display: currentMode === 'placing' ? 'block' : 'none' }} >
-                     <strong>Add Object:{selectedObjectToAdd?.name}</strong>
+                 <div style={{ borderTop: '1px solid #555', paddingTop: '8px', marginTop: '8px', display: currentMode === 'place' ? 'block' : 'none' }} >
+                     <strong>Add Object:</strong>
                      {Object.entries(groupedConfigurations).map(([type, configs]) => (
                          <div key={type} style={{ marginTop: '5px' }}>
                              <strong style={{ textTransform: 'capitalize', display: 'block', marginBottom: '3px' }}>{type.replace(/_/g, ' ')}s:</strong>
                              {configs.map((config) => (
                                  <button
                                      key={config.name}
-                                     style={getButtonStyle('placing', false, selectedObjectToAdd?.name === config.name)} // Highlight if selected for placement
+                                     style={getButtonStyle(currentMode =='place' && (selectedObjectToAdd?.name === config.name), false)} // Highlight if selected for placement
                                      onClick={() => handleSelectConfiguration(config)}
                                      title={`Place ${config.name}`}
                                  >
