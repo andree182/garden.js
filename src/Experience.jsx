@@ -55,9 +55,11 @@ export function Experience({
         (event, gridX, gridZ) => {
             if (draggingInfo || !sceneLogicRef.current) return; // Ignore grid clicks while dragging
 
-
             // --- Mode-Specific Actions ---
             if (selectedObjectToAdd) {
+                event.stopPropagation(); // avoid adding multiple objects in parallel
+
+                // TODO: this calculates relative to the ground plane, but should relative to the cell
                 raycaster.setFromCamera(pointer, camera);
                 const groundPlane = new THREE.Plane(
                     new THREE.Vector3(0, 1, 0),
