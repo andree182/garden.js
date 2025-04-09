@@ -318,7 +318,7 @@ export const SceneWithLogic = forwardRef(
                         baseObj.worldZ = baseObj.worldZ ?? 0;
                         baseObj.rotationY = baseObj.rotationY ?? 0;
                         baseObj.name =
-                            baseObj.name ?? config?.name ?? baseObj.type;
+                            baseObj.name ?? baseObj.type;
                         return baseObj;
                     });
                     setObjects(processedObjects);
