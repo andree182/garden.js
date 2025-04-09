@@ -18,9 +18,6 @@ import { Pergola } from './Pergola';
 import { GravelPatch } from './GravelPatch';
 import { House } from './House';
 
-// Import configurations (if separated)
-import { objectConfigurations } from './configurations'; // Assuming configurations.js exists
-
 // Create the component map
 export const ObjectComponents = {
     tree: Tree,
@@ -42,4 +39,5 @@ export const ObjectComponents = {
 };
 
 // Re-export configurations
+import { objectConfigurations } from './configurations';
 export { objectConfigurations };
