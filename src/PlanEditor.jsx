@@ -52,6 +52,7 @@ export const COLORS = [
 export const DRAG_PLANE_OFFSET = 0.1; // Place drag plane slightly above ground
 const DRAG_THRESHOLD = 5; // Minimum pixels pointer must move to initiate a drag
 export const LOCAL_STORAGE_KEY = "planEditorSaveData_v5"; // Key for localStorage, update if format changes significantly
+const INTRO_SEEN_KEY = 'planEditorIntroSeen_v1';
 
 // --- Helper Functions ---
 export const getInitialHeight = (x, z, width, height) => {
@@ -131,6 +132,7 @@ export default function PlanEditor() {
     const fileInputRef = useRef(null);
 
     // --- UI State and App Modes ---
+    const [showIntro, setShowIntro] = useState(false); 
     const [currentMode, setCurrentMode] = useState("select"); // Default mode: 'select', 'terrain', 'add-tree', etc.
     const [selectedObjectId, setSelectedObjectId] = useState(null);
     const [selectedObjectProps, setSelectedObjectProps] = useState(null);
@@ -185,6 +187,13 @@ export default function PlanEditor() {
             setSelectedObjectProps(null);
         }
     }, [selectedObjectId]);
+
+    useEffect(() => {
+        const introSeen = localStorage.getItem(INTRO_SEEN_KEY);
+        if (!introSeen) {
+            setShowIntro(true);
+        }
+    }, []);
 
     const onSaveClick = useCallback(() => {
         const saveData = sceneLogicRef.current?.save();
@@ -484,6 +493,14 @@ export default function PlanEditor() {
                 return "Select a mode.";
         }
     }, [currentMode, selectedObjectToAdd]);
+
+    const handleShowIntro = () => {
+        setShowIntro(true);
+    };
+    const handleCloseIntro = () => {
+        setShowIntro(false);
+        localStorage.setItem(INTRO_SEEN_KEY, 'true'); // Mark as seen
+    };
 
     const renderPropertyEditors = () => {
         if (!selectedObjectProps) return null;
@@ -848,15 +865,10 @@ export default function PlanEditor() {
             >
                 <strong>Actions:</strong>
                 <br />
-                <button onClick={onLoadClick} style={getButtonStyle()}>
-                    Load
-                </button>
-                <button onClick={onSaveClick} style={getButtonStyle()}>
-                    Save
-                </button>
-                <button onClick={handleReset} style={getButtonStyle()}>
-                    Reset
-                </button>
+                <button onClick={handleShowIntro} style={getButtonStyle()}>Intro</button>
+                <button onClick={handleReset} style={getButtonStyle()}>New</button>
+                <button onClick={onLoadClick} style={getButtonStyle()}>Load</button>
+                <button onClick={onSaveClick} style={getButtonStyle()}>Save</button>
                 <button
                     onClick={handleExportObjectList}
                     style={getButtonStyle()}
@@ -1266,6 +1278,28 @@ export default function PlanEditor() {
             </div>
 
             {renderAddObjectList()}
+
+            {/* INTRO OVERLAY */}
+            {showIntro && (
+                <div style={{
+                    position: 'fixed',
+                    top: '0', left: '0', right: '0', bottom: '0',
+                    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 100 // High z-index to be on top
+                }}>
+                    <div style={{
+                        background: '#333', color: '#eee', padding: '30px', borderRadius: '8px',
+                        maxWidth: '500px', textAlign: 'center', border: '1px solid #555'
+                    }}>
+                        <h2>Hello there!</h2>
+                        <p>This is a simpla garden plan edito. At the moment it's PoC, alpha state...</p>
+                        <button onClick={handleCloseIntro} style={{ padding: '10px 20px', marginTop: '20px', cursor: 'pointer' }}>Got it!</button>
+                   </div>
+                </div>
+            )}
 
             {/* Floating GitHub Link Button */}
             <a
