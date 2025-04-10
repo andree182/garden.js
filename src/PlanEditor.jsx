@@ -153,6 +153,7 @@ export default function PlanEditor() {
     const [selectedObjectToAdd, setSelectedObjectToAdd] = useState(null);
     const [isOrthographic, setIsOrthographic] = useState(false);
     const [showObjectNames, setShowObjectNames] = useState(false);
+    const [objectFilter, setObjectFilter] = useState('');
     const [sunAzimuth, setSunAzimuth] = useState(45); // Default: Northeast-ish
     const [sunElevation, setSunElevation] = useState(60); // Default: Fairly high sun
     const [currentMonth, setCurrentMonth] = useState(6);
@@ -700,7 +701,15 @@ export default function PlanEditor() {
     }, [currentMode]);
 
     const groupedConfigurations = useMemo(() => {
-        return objectConfigurations.reduce((acc, config) => {
+        const filterText = objectFilter.toLowerCase().trim();
+        const filteredConfigs = filterText === ''
+            ? objectConfigurations // No filter applied
+            : objectConfigurations.filter(config =>
+                config.name.toLowerCase().includes(filterText) ||
+                config.type.toLowerCase().includes(filterText) // Optional: filter by type name too
+              );
+
+        return filteredConfigs.reduce((acc, config) => {
             const type = config.type;
             if (!acc[type]) {
                 acc[type] = [];
@@ -708,7 +717,7 @@ export default function PlanEditor() {
             acc[type].push(config);
             return acc;
         }, {});
-    }, []); // Runs once
+    }, [objectFilter]); // Runs once
 
     const renderAddObjectList = () => {
         if (!showAddObjectList) return null;
@@ -1238,6 +1247,15 @@ export default function PlanEditor() {
                     }}
                 >
                     <strong>Add Object:</strong>
+                     <div style={{ display: 'flex', alignItems: 'center', marginBottom: '5px' }}>
+                        <input
+                            type="text"
+                            placeholder="Filter..."
+                            value={objectFilter}
+                            onChange={(e) => setObjectFilter(e.target.value)}
+                            style={{ flexGrow: 1, padding: '2px 4px', backgroundColor: '#555', color: '#eee', border: '1px solid #777', fontSize:'11px' }}
+                        />
+                     </div>
                     {Object.entries(groupedConfigurations).map(
                         ([type, configs]) => (
                             <div key={type} style={{ marginTop: "5px" }}>
