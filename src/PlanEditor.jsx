@@ -37,6 +37,7 @@ export const HEIGHT_MODIFIER = 0.1; // Base height change per brush application
 export const INITIAL_MAX_HEIGHT = 1.5; // For terrain generation
 export const INITIAL_GRID_WIDTH = 20;
 export const INITIAL_GRID_HEIGHT = 20;
+export const MIN_TERRAIN_HEIGHT = 0.1;
 const MIN_GRID_DIM = 5;
 const MAX_GRID_DIM = 100;
 export const COLORS = [
@@ -60,7 +61,7 @@ export const getInitialHeight = (x, z, width, height) => {
     const freqZ = (2 * Math.PI) / height;
     const sinX = Math.sin(x * freqX * 2);
     const sinZ = Math.sin(z * freqZ * 2);
-    return ((sinX + sinZ + 2) / 4) * INITIAL_MAX_HEIGHT;
+    return MIN_TERRAIN_HEIGHT + ((sinX + sinZ + 2) / 4) * INITIAL_MAX_HEIGHT;
 };
 // For loading old saves or placing initial grid items
 export const gridToWorldCenter = (
@@ -977,6 +978,8 @@ export default function PlanEditor() {
                                     parseFloat(e.target.value) || 0
                                 )
                             }
+                            min={MIN_TERRAIN_HEIGHT}
+                            max="100"
                             disabled={terrainPaintMode !== "absolute"}
                             style={{
                                 width: "50px",

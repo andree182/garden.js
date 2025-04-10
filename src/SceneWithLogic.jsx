@@ -2,7 +2,9 @@ import { Text } from "@react-three/drei";
 import React, { forwardRef, useState, useMemo, useCallback, useRef, useEffect, useImperativeHandle } from "react";
 import * as THREE from "three";
 import { ObjectComponents } from "./objects";
-import { INITIAL_GRID_WIDTH, INITIAL_GRID_HEIGHT, gridToWorldCenter, LOCAL_STORAGE_KEY, getInitialHeight, INITIAL_MAX_HEIGHT, COLORS, CELL_SIZE, GridCell, getWorldYBase } from "./PlanEditor";
+import { INITIAL_GRID_WIDTH, INITIAL_GRID_HEIGHT, gridToWorldCenter,
+    LOCAL_STORAGE_KEY, getInitialHeight, INITIAL_MAX_HEIGHT, COLORS, CELL_SIZE, GridCell, getWorldYBase,
+    MIN_TERRAIN_HEIGHT } from "./PlanEditor";
 
 // --- Scene Component (Manages Data State and 3D Primitives) ---
 export const SceneWithLogic = forwardRef(
@@ -149,7 +151,7 @@ export const SceneWithLogic = forwardRef(
                         COLORS.length - 1,
                         Math.max(0, Math.floor(hr * (COLORS.length - 2)) + 1)
                     );
-                    data[z][x] = h < 0.05 ? COLORS[0] : COLORS[ci];
+                    data[z][x] = h <= MIN_TERRAIN_HEIGHT ? COLORS[0] : COLORS[ci];
                 }
             }
             return data;
@@ -212,7 +214,7 @@ export const SceneWithLogic = forwardRef(
                                         currentHeight + deltaHeight * intensity;
                                 }
 
-                                newData[z][x] = Math.max(0, modifiedHeight);
+                                newData[z][x] = Math.max(MIN_TERRAIN_HEIGHT, modifiedHeight);
                             }
                         }
                     }
