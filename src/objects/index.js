@@ -17,6 +17,11 @@ import { GardenLight } from './GardenLight';
 import { Pergola } from './Pergola';
 import { GravelPatch } from './GravelPatch';
 import { House } from './House';
+import { Paver } from './Paver';
+import { FencePanel } from './FencePanel';
+import { Bench } from './Bench';
+import { Pot } from './Pot';
+import { Boulder } from './Boulder';
 
 // Create the component map
 export const ObjectComponents = {
@@ -36,6 +41,11 @@ export const ObjectComponents = {
     pergola: Pergola,
     gravel_patch: GravelPatch,
     house: House,
+    paver: Paver,
+    fence_panel: FencePanel,
+    bench: Bench,
+    pot: Pot,
+    boulder: Boulder,
 };
 
 // Re-export configurations

@@ -82,9 +82,21 @@ export const objectConfigurations = [
     
     { name: "Long Hedge", type: "hedge", props: { length: 3.0, height: 0.7, color: "#2F4F2F" } },
     { name: "Square Hedge", type: "hedge", props: { length: 0.8, width: 0.8, height: 0.6 } },
+    
+    { name: "Wood Panel (Vert)", type: "fence_panel", props: { pattern: 'vertical_stripes', color1: "#BC8F8F", color2: "#A0522D", thickness: 0.1, spacing: 0.02 } },
+    { name: "Wood Panel (Horiz)", type: "fence_panel", props: { pattern: 'horizontal_stripes', color1: "#BC8F8F", color2: "#A0522D", thickness: 0.1, spacing: 0.02 } },
+    { name: "Wire Mesh Fence", type: "fence_panel", props: { pattern: 'wire_mesh', color1: "#555555", thickness: 0.015, spacing: 0.08, backgroundColor: '#AAAAAA44' } }, // Semi-transparent BG
+    { name: "Diagonal Slats", type: "fence_panel", props: { pattern: 'vertical_stripes', rotation: 45, color1: "#D2B48C", color2: "#CD853F", thickness: 0.06, spacing: 0.06 } },
+
     // Raised Beds
     { name: "Wooden Bed", type: "raised_bed", props: { length: 2.0, width: 0.6, height: 0.25, frameColor: "#A0522D", soilColor: "#6B4423" } },
     { name: "Stone Bed", type: "raised_bed", props: { length: 1.2, width: 1.2, height: 0.4, frameColor: "#778899", soilColor: "#5C4033" } },
+    { name: "Park Bench", type: "bench", props: {} },
+    { name: "Wood Bench", type: "bench", props: { color: "#8B4513" } },
+    { name: "Terracotta Pot", type: "pot", props: {} },
+    { name: "Large Stone Pot", type: "pot", props: { topDiameter: 0.8, bottomDiameter: 0.6, height: 0.6, color: "#778899"} },
+    { name: "Small Boulder", type: "boulder", props: { size: 0.4, color: "#A0A0A0"} },
+    { name: "Large Boulder", type: "boulder", props: { size: 1.0, color: "#696969"} },
     // Cars
     { name: "Red Car", type: "car", props: { color: "#DC143C" } },
     { name: "Blue Car", type: "car", props: { color: "#4682B4" } },
@@ -98,6 +110,8 @@ export const objectConfigurations = [
     { name: "Sandstone", type: "stepping_stone", props: { diameter: 0.35, color: "#C19A6B" } },
     { name: "Paver Stone", type: "rect_stepping_stone", props: { length: 0.6, width: 0.4, color: "#A9A9A9" } },
     { name: "Flagstone Slab", type: "rect_stepping_stone", props: { length: 0.8, width: 0.5, height: 0.06, color: "#778899" } },
+    { name: "Square Paver", type: "paver", props: {} },
+    { name: "Rect Paver", type: "paver", props: { length: 0.8, width: 0.4, color: "#B0A492"} },
 
     // Pergolas
     { name: "Wooden Pergola", type: "pergola", props: {} }, // Use defaults
