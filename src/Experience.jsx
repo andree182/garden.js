@@ -44,6 +44,7 @@ export function Experience({
                     initialY: getWorldYBase(groundHeight) + DRAG_PLANE_OFFSET,
                     pointerId: event.pointerId,
                 });
+                if (orbitControlsRef.current) orbitControlsRef.current.enabled = false;
                 event.target?.setPointerCapture(event.pointerId);
                 console.log("Potential Drag Start:", objectId);
             }
@@ -106,7 +107,7 @@ export function Experience({
                 console.log("Paint Start");
             } else if (currentMode === "select") {
                 // Click on grid in select mode deselects any selected object
-                //onSelectObject(null);
+                onSelectObject(null);
             } else if (currentMode === "paint-color") {
                 event.stopPropagation();
                 setIsPaintingColor(true);

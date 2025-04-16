@@ -696,7 +696,7 @@ export default function PlanEditor() {
 
     // Handler for Canvas pointer missed - only deselect if in 'select' mode
     const handleCanvasPointerMissed = useCallback(() => {
-        if (currentMode === "select" && selectedObjectId !== null) {
+        if (currentMode === "select") { // TODO: this seems to be true often: && selectedObjectId !== null
             setSelectedObjectId(null);
         }
     }, [currentMode]);
