@@ -126,4 +126,10 @@ export const objectConfigurations = [
     { name: "Simple House (Saddle)", type: "house", props: {} }, // Use defaults
     { name: "Long House (Flat)", type: "house", props: { length: 6, width: 2.5, height: 2.8, roofType: 'flat', wallColor: '#C0C0C0', roofColor: '#555555' } },
     { name: "Red Brick House", type: "house", props: { wallColor: "#8B0000", roofColor: "#444444"} },
+    
+    // Play Structures
+    { name: "Wooden Swing Set", type: "swing_set", props: { materialType: 'wood_10cm'} },
+    { name: "Metal Swing Set", type: "swing_set", props: { materialType: 'iron_round_5cm', materialColor: '#4682B4', numSwings: 3, width: 3.0 } }, // Blue Metal
+    { name: "A-Frame Wood Set", type: "swing_set", props: { materialType: 'wood_15cm', standPoles: 'A-frame', depth: 2.0 } },
+    { name: "Single Pole Metal", type: "swing_set", props: { materialType: 'iron_round_5cm', standPoles: 'single', width: 2.0, numSwings: 1 } },
 ];
