@@ -133,7 +133,7 @@ export default function PlanEditor() {
     const fileInputRef = useRef(null);
 
     // --- UI State and App Modes ---
-    const [showIntro, setShowIntro] = useState(false); 
+    const [showIntro, setShowIntro] = useState(false);
     const [currentMode, setCurrentMode] = useState("select"); // Default mode: 'select', 'terrain', 'add-tree', etc.
     const [selectedObjectId, setSelectedObjectId] = useState(null);
     const [selectedObjectProps, setSelectedObjectProps] = useState(null);
@@ -159,7 +159,7 @@ export default function PlanEditor() {
     const [sunElevation, setSunElevation] = useState(60); // Default: Fairly high sun
     const [currentMonth, setCurrentMonth] = useState(6);
 
-    const getNextObjectId = useCallback(() => 
+    const getNextObjectId = useCallback(() =>
         Math.max(...sceneLogicRef.current?.getObjects().map(o => o.id)) + 1, []);
 
     const getButtonStyle = (highlight = false, disabled = false) => ({
@@ -365,6 +365,12 @@ export default function PlanEditor() {
         setIsOrthographic(false);
     };
 
+    const handleObjectPropertyUpdate = useCallback((objectId, propName, value) => {
+        if (objectId === selectedObjectId) {
+            setSelectedObjectProps(prevProps => prevProps ? { ...prevProps, [propName]: value } : null);
+        }
+    }, [selectedObjectId]);
+
     // --- Keyboard Shortcuts Handler ---
     const handleKeyDown = useCallback(
         (event) => {
@@ -482,7 +488,7 @@ export default function PlanEditor() {
     const instructions = useMemo(() => {
         switch (currentMode) {
             case "select":
-                return "Click object to select/edit properties. Drag selected object to move.";
+                return "Click object to select/edit properties. Drag selected object to move. Ctrl+drag to rotate.";
             case "terrain":
                 return "Click/Drag grid to modify height (Shift=Lower). Esc to exit.";
             case "paint-color":
@@ -696,6 +702,7 @@ export default function PlanEditor() {
 
     // Handler for Canvas pointer missed - only deselect if in 'select' mode
     const handleCanvasPointerMissed = useCallback(() => {
+        // console.log("handleCanvasPointerMissed", currentMode, selectedObjectId);
         if (currentMode === "select") { // TODO: this seems to be true often: && selectedObjectId !== null
             setSelectedObjectId(null);
         }
@@ -1369,6 +1376,7 @@ export default function PlanEditor() {
                         paintColor={paintColor}
                         sunAzimuth={sunAzimuth} // Pass down sun state
                         sunElevation={sunElevation} // Pass down sun state
+                        onObjectPropertyUpdate={handleObjectPropertyUpdate}
                         terrainPaintMode={terrainPaintMode}
                         absolutePaintHeight={absolutePaintHeight}
                         currentMonth={currentMonth}

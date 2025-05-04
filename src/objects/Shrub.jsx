@@ -20,7 +20,8 @@ export const Shrub = React.memo(({ position, isSelected, onSelect, onPointerDown
     // Editable properties
     color = "#556B2F",
     maxRadius = 0.4,
-    currentMonth = 6
+    currentMonth = 6,
+    rotationY = 0,
 }) => {
     const currentRadius = lerp(0.1, maxRadius, globalAge);
     
@@ -38,7 +39,7 @@ export const Shrub = React.memo(({ position, isSelected, onSelect, onPointerDown
     }, [isWinter, isSpring, color]);
 
     return (
-        <ObjectBase position={position} isSelected={isSelected} onSelect={onSelect} onPointerDown={onPointerDown} objectId={objectId} type="shrub">
+        <ObjectBase position={position} rotationY={rotationY} isSelected={isSelected} onSelect={onSelect} onPointerDown={onPointerDown} objectId={objectId} type="shrub">
             <mesh position={[0, currentRadius, 0]} scale={[currentRadius / maxRadius || 0.01, currentRadius / maxRadius || 0.01, currentRadius / maxRadius || 0.01]} castShadow>
                 <sphereGeometry args={[maxRadius, 16, 12]} />
                 <meshStandardMaterial color={color} roughness={0.9} {...materialProps} /> {/* Use prop color */}
@@ -51,4 +52,5 @@ export const Shrub = React.memo(({ position, isSelected, onSelect, onPointerDown
 Shrub.editorSchema = [
     { name: 'maxRadius', label: 'Radius', type: 'number', step: 0.1, min: 0.1, max: 2.5, defaultValue: 0.4 },
     { name: 'color', label: 'Color', type: 'color', defaultValue: "#556B2F" },
+    { name: 'rotationY', label: 'Rotation Y', type: 'number', step: 1, min: 0, max: 360, defaultValue: 0 },
 ];

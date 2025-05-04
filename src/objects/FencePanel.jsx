@@ -25,7 +25,8 @@ export const FencePanel = React.memo(({ position, isSelected, onSelect, onPointe
     spacing = 0.08,       // Spacing between stripes or wires (relative to pattern repeat)
     color1 = "#BC8F8F",    // Stripe/Wire color
     color2 = "#A0522D",    // Second stripe color / Background for stripes (ignored for wire)
-    backgroundColor = null // Optional background plane color (null for transparent)
+    backgroundColor = null, // Optional background plane color (null for transparent)
+    rotationY = 0,
 }) => {
     const meshRef = useRef();
     const backgroundRef = useRef();
@@ -153,7 +154,7 @@ export const FencePanel = React.memo(({ position, isSelected, onSelect, onPointe
 
     return (
         // Position base of fence panel correctly
-        <ObjectBase position={[position[0], position[1] + height / 2, position[2]]} isSelected={isSelected} onSelect={onSelect} onPointerDown={onPointerDown} objectId={objectId} type="fence_panel">
+        <ObjectBase position={[position[0], position[1] + height / 2, position[2]]} rotationY={rotationY} isSelected={isSelected} onSelect={onSelect} onPointerDown={onPointerDown} objectId={objectId} type="fence_panel">
             {/* Optional solid background plane */}
             {backgroundColor && (
                  <mesh ref={backgroundRef} geometry={planeGeometry} position={[0,0,-0.005]} receiveShadow> {/* Slightly behind pattern */}
@@ -183,4 +184,5 @@ FencePanel.editorSchema = [
     { name: 'color1', label: 'Color 1 / Wire', type: 'color', defaultValue: "#BC8F8F" },
     { name: 'color2', label: 'Color 2 / BG', type: 'color', defaultValue: "#A0522D" }, // Used for stripes background
     { name: 'backgroundColor', label: 'Solid BG Color', type: 'color', defaultValue: null }, // Optional background plane
+    { name: 'rotationY', label: 'Rotation Y', type: 'number', step: 1, min: 0, max: 360, defaultValue: 0 },
 ];

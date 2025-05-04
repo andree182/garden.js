@@ -8,7 +8,7 @@ import * as THREE from 'three';
 const SELECTION_COLOR = '#FF00FF'; // Keep consistent or pass as prop if needed
 
 // --- ObjectBase: Wrapper with common logic (selection, animation, pointer down) ---
-export const ObjectBase = ({ children, position, isSelected, onSelect, onPointerDown, objectId, type, rotationY }) => {
+export const ObjectBase = ({ children, position, isSelected, onSelect, onPointerDown, objectId, type, rotationY = 0 }) => {
     const groupRef = useRef();
     const [animOffset] = useState(() => Math.random() * Math.PI * 2);
     const [freqMult] = useState(() => 0.8 + Math.random() * 0.4);
@@ -34,7 +34,6 @@ export const ObjectBase = ({ children, position, isSelected, onSelect, onPointer
             const baseAmplitude = 0.05;
             groupRef.current.rotation.x = Math.sin(time * baseFrequency * freqMult + animOffset) * baseAmplitude;
             groupRef.current.rotation.z = Math.cos(time * baseFrequency * freqMult * 0.9 + animOffset * 1.1) * baseAmplitude * 0.8;
-            groupRef.current.rotation.y = 0;
         } else {
             groupRef.current.rotation.x = 0;
             groupRef.current.rotation.z = 0;

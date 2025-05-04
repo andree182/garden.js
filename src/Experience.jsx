@@ -12,6 +12,7 @@ export function Experience({
     selectedObjectId, // Read-only, selection managed by PlanEditor via onSelectObject
     globalAge, brushSize, // Props for rendering/API
     sceneLogicRef, onSelectObject, onInteractionEnd, getInitialObjectId, showCoordinates, paintColor, sunAzimuth, sunElevation, terrainPaintMode, absolutePaintHeight, currentMonth, isOrthographic, showObjectNames,
+    onObjectPropertyUpdate
 }) {
     const { raycaster, pointer, camera, gl } = useThree();
     const orbitControlsRef = useRef();
@@ -23,10 +24,12 @@ export function Experience({
     const [isPaintingColor, setIsPaintingColor] = useState(false);
     const [paintDirection, setPaintDirection] = useState(1);
     const pointerRef = useRef({ x: 0, y: 0 });
+    const ROTATION_SENSITIVITY = 1;
 
     // --- Event Handlers (Now strictly check currentMode) ---
     const handleObjectPointerDown = useCallback(
         (event, objectId, objectType) => {
+            //console.log("OBJECT", event, objectId, objectType);
             // Only handle if in 'select' mode
             if (currentMode !== "select") return;
 
@@ -43,6 +46,8 @@ export function Experience({
                     id: objectId,
                     initialY: getWorldYBase(groundHeight) + DRAG_PLANE_OFFSET,
                     pointerId: event.pointerId,
+                    startRotationY: clickedObject.rotationY || 0,
+                    startX: event.clientX,
                 });
                 if (orbitControlsRef.current) orbitControlsRef.current.enabled = false;
                 event.target?.setPointerCapture(event.pointerId);
@@ -54,6 +59,7 @@ export function Experience({
 
     const handleGridPointerDown = useCallback(
         (event, gridX, gridZ) => {
+            //console.log("GRID", event, gridX, gridZ);
             if (draggingInfo || !sceneLogicRef.current) return; // Ignore grid clicks while dragging
 
             // --- Mode-Specific Actions ---
@@ -142,10 +148,13 @@ export function Experience({
 
     const handlePointerMove = useCallback(
         (event) => {
+            // console.log("move", event);
             pointerRef.current.x = (event.clientX / window.innerWidth) * 2 - 1;
             pointerRef.current.y =
                 -(event.clientY / window.innerHeight) * 2 + 1;
             if (!sceneLogicRef.current) return;
+
+            const ctrlPressed = event.ctrlKey;
 
             // If dragging, disable controls on first move
             if (draggingInfo &&
@@ -159,17 +168,25 @@ export function Experience({
             raycaster.setFromCamera(pointerRef.current, camera);
 
             if (draggingInfo && dragPlaneRef.current) {
-                // Actual drag is happening
-                const intersects = raycaster.intersectObject(
-                    dragPlaneRef.current
-                );
-                if (intersects.length > 0) {
-                    const point = intersects[0].point;
-                    sceneLogicRef.current.updateObjectPositionWorld(
-                        draggingInfo.id,
-                        point.x,
-                        point.z
+                if (ctrlPressed) {
+                    const deltaX = event.clientX - draggingInfo.startX;
+                    const rotationChange = deltaX * ROTATION_SENSITIVITY;
+                    const newRotationY = (draggingInfo.startRotationY + rotationChange) % 360;
+                    sceneLogicRef.current.updateObjectRotationY(draggingInfo.id, newRotationY);
+                    onObjectPropertyUpdate(draggingInfo.id, 'rotationY', newRotationY);
+                } else {
+                    // Actual drag is happening
+                    const intersects = raycaster.intersectObject(
+                        dragPlaneRef.current
                     );
+                    if (intersects.length > 0) {
+                        const point = intersects[0].point;
+                        sceneLogicRef.current.updateObjectPositionWorld(
+                            draggingInfo.id,
+                            point.x,
+                            point.z
+                        );
+                    }
                 }
             } else if (isPaintingTerrain) {
                 // Painting is happening (implicitly, currentMode must be 'terrain')
@@ -239,12 +256,13 @@ export function Experience({
             paintColor,
             terrainPaintMode,
             absolutePaintHeight,
+            onObjectPropertyUpdate,
         ]
     );
 
     const handlePointerUp = useCallback(
         (event) => {
-            console.log("Pointer up");
+            // console.log("Pointer up", event);
             const pointerId = event.pointerId;
 
             if (draggingInfo) {

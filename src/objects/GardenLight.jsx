@@ -21,13 +21,14 @@ export const GardenLight = React.memo(({ position, isSelected, onSelect, onPoint
     postHeight = 0.6, postDiameter = 0.04, fixtureRadius = 0.06,
     lightColor = "#FFFFE0", // Light Yellow
     lightIntensity = 1.5, // PointLight intensity
-    lightRange = 3.0 // PointLight distance/range
+    lightRange = 3.0, // PointLight distance/range
+    rotationY = 0,
 }) => {
     const lightFixtureY = postHeight + fixtureRadius * 0.5;
     const pointLightY = postHeight + fixtureRadius * 0.2; // Position light source slightly below visual fixture top
 
     return (
-        <ObjectBase position={position} isSelected={isSelected} onSelect={onSelect} onPointerDown={onPointerDown} objectId={objectId} type="garden_light">
+        <ObjectBase position={position} rotationY={rotationY} isSelected={isSelected} onSelect={onSelect} onPointerDown={onPointerDown} objectId={objectId} type="garden_light">
             {/* Post */}
             <mesh position={[0, postHeight / 2, 0]} castShadow>
                  <cylinderGeometry args={[postDiameter / 2, postDiameter / 2, postHeight, 8]} />
@@ -57,4 +58,5 @@ GardenLight.editorSchema = [
     { name: 'lightColor', label: 'Light Color', type: 'color', defaultValue: "#FFFFE0" },
     { name: 'lightIntensity', label: 'Intensity', type: 'number', step: 0.1, min: 0, max: 5, defaultValue: 1.5 },
     { name: 'lightRange', label: 'Range', type: 'number', step: 0.1, min: 0, max: 10, defaultValue: 3.0 },
+    { name: 'rotationY', label: 'Rotation Y', type: 'number', step: 1, min: 0, max: 360, defaultValue: 0 },
 ];

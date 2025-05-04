@@ -18,12 +18,13 @@ const Y_AXIS = new THREE.Vector3(0, 1, 0);
 
 // Boulder (Simple displaced sphere)
 export const Boulder = React.memo(({ position, isSelected, onSelect, onPointerDown, objectId, globalAge=1,
-    size = 0.6, roughness = 0.8, color = "#888888"
+    size = 0.6, roughness = 0.8, color = "#888888",
+    rotationY = 0,
 }) => {
     // Note: True displacement requires more setup (vertex shaders or more complex geometry)
     // This is a simple sphere representing a boulder.
     return (
-        <ObjectBase position={[position[0], position[1] + size/2, position[2]]} isSelected={isSelected} onSelect={onSelect} onPointerDown={onPointerDown} objectId={objectId} type="boulder">
+        <ObjectBase position={[position[0], position[1] + size/2, position[2]]} rotationY={rotationY} isSelected={isSelected} onSelect={onSelect} onPointerDown={onPointerDown} objectId={objectId} type="boulder">
             <mesh castShadow receiveShadow>
                  <sphereGeometry args={[size / 2, 12, 8]} />
                  <meshStandardMaterial color={color} roughness={roughness} metalness={0.1}/>
@@ -35,4 +36,5 @@ Boulder.editorSchema = [
     { name: 'size', label: 'Approx Size', type: 'number', step: 0.1, min: 0.2, max: 3.0, defaultValue: 0.6 },
     { name: 'color', label: 'Color', type: 'color', defaultValue: "#888888" },
     { name: 'roughness', label: 'Roughness', type: 'number', step: 0.05, min: 0, max: 1, defaultValue: 0.8 },
+    { name: 'rotationY', label: 'Rotation Y', type: 'number', step: 1, min: 0, max: 360, defaultValue: 0 },
 ];

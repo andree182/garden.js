@@ -25,6 +25,7 @@ export const SwingingSet = React.memo(({ position, isSelected, onSelect, onPoint
     numSwings = 2,
     swingSeatColor = "#8B4513", // Brown default
     swingChainColor = "#808080", // Grey default
+    rotationY = 0,
 }) => {
 
     // --- Derived Material Properties ---
@@ -74,7 +75,7 @@ export const SwingingSet = React.memo(({ position, isSelected, onSelect, onPoint
 
     // --- Component Rendering ---
     return (
-        <ObjectBase position={position} isSelected={isSelected} onSelect={onSelect} onPointerDown={onPointerDown} objectId={objectId} type="swing_set">
+        <ObjectBase position={position} rotationY={rotationY} isSelected={isSelected} onSelect={onSelect} onPointerDown={onPointerDown} objectId={objectId} type="swing_set">
 
             {/* Top Bar */}
             <mesh position={[topBarLength / 2, topBarY, 0]} rotation={[0, 0, Math.PI / 2]} scale={[1, topBarLength, 1]} geometry={poleGeo} material={frameMat} castShadow receiveShadow/>
@@ -137,4 +138,5 @@ SwingingSet.editorSchema = [
     { name: 'materialColor', label: 'Frame Color', type: 'color', defaultValue: null }, // Null uses default based on materialType
     { name: 'swingSeatColor', label: 'Seat Color', type: 'color', defaultValue: "#8B4513" },
     { name: 'swingChainColor', label: 'Chain Color', type: 'color', defaultValue: "#808080" },
+    { name: 'rotationY', label: 'Rotation Y', type: 'number', step: 1, min: 0, max: 360, defaultValue: 0 },
 ];

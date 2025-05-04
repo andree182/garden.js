@@ -17,10 +17,11 @@ const tempQuaternion = new THREE.Quaternion();
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
 
 export const Paver = React.memo(({ position, isSelected, onSelect, onPointerDown, objectId, globalAge=1,
-    width = 0.5, length = 0.5, height = 0.06, color = "#A9A9A9" // Dark Grey
+    width = 0.5, length = 0.5, height = 0.06, color = "#A9A9A9", // Dark Grey
+    rotationY = 0,
 }) => {
     return (
-        <ObjectBase position={[position[0], position[1] + height/2, position[2]]} isSelected={isSelected} onSelect={onSelect} onPointerDown={onPointerDown} objectId={objectId} type="paver">
+        <ObjectBase position={[position[0], position[1] + height/2, position[2]]} rotationY={rotationY} isSelected={isSelected} onSelect={onSelect} onPointerDown={onPointerDown} objectId={objectId} type="paver">
             <mesh scale={[length, height, width]} castShadow={false} receiveShadow>
                  <boxGeometry args={[1, 1, 1]} />
                  <meshStandardMaterial color={color} roughness={0.85} metalness={0.1} />
@@ -33,4 +34,5 @@ Paver.editorSchema = [
     { name: 'width', label: 'Width (Z)', type: 'number', step: 0.05, min: 0.1, max: 2.0, defaultValue: 0.5 },
     { name: 'height', label: 'Thickness', type: 'number', step: 0.01, min: 0.02, max: 0.15, defaultValue: 0.06 },
     { name: 'color', label: 'Color', type: 'color', defaultValue: "#A9A9A9" },
+    { name: 'rotationY', label: 'Rotation Y', type: 'number', step: 1, min: 0, max: 360, defaultValue: 0 },
 ];

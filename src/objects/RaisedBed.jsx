@@ -20,7 +20,8 @@ const Y_AXIS = new THREE.Vector3(0, 1, 0);
 export const RaisedBed = React.memo(({ position, isSelected, onSelect, onPointerDown, objectId, globalAge=1,
     width = 0.8, length = 1.5, height = 0.3,
     frameColor = "#8B4513", // Brown wood color
-    soilColor = "#5C4033" // Dark brown soil
+    soilColor = "#5C4033", // Dark brown soil
+    rotationY = 0,
 }) => {
     const frameThickness = 0.05; // Thickness of the bed walls
     const soilHeightOffset = -0.03; // How far below the top edge the soil starts
@@ -32,7 +33,7 @@ export const RaisedBed = React.memo(({ position, isSelected, onSelect, onPointer
 
     return (
         // Use ObjectBase for selection/interaction, position base correctly
-        <ObjectBase position={position} isSelected={isSelected} onSelect={onSelect} onPointerDown={onPointerDown} objectId={objectId} type="raised_bed">
+        <ObjectBase position={position} rotationY={rotationY} isSelected={isSelected} onSelect={onSelect} onPointerDown={onPointerDown} objectId={objectId} type="raised_bed">
             {/* Frame using Box helper for simplicity? Or manual mesh */}
              {/* We need 4 walls and potentially a bottom, Box helper isn't ideal. Let's use meshes. */}
              {/* Front/Back Walls */}
@@ -70,4 +71,5 @@ RaisedBed.editorSchema = [
     { name: 'height', label: 'Height (Y)', type: 'number', step: 0.05, min: 0.1, max: 1, defaultValue: 0.3 },
     { name: 'frameColor', label: 'Frame Color', type: 'color', defaultValue: "#8B4513" },
     { name: 'soilColor', label: 'Soil Color', type: 'color', defaultValue: "#5C4033" },
+    { name: 'rotationY', label: 'Rotation Y', type: 'number', step: 1, min: 0, max: 360, defaultValue: 0 },
 ];

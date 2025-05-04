@@ -28,7 +28,8 @@ export const Grass = React.memo(({ position, isSelected, onSelect, onPointerDown
     colorRatio = 0.5,
     density = 50,
     straightness = 0.7,
-    currentMonth = 6
+    currentMonth = 6,
+    rotationY = 0,
  }) => {
 
     const instancedMeshRef = useRef();
@@ -165,7 +166,7 @@ export const Grass = React.memo(({ position, isSelected, onSelect, onPointerDown
 
 
     return (
-         <ObjectBase position={position} isSelected={isSelected} onSelect={onSelect} onPointerDown={onPointerDown} objectId={objectId} type="grass">
+         <ObjectBase position={position} rotationY={rotationY} isSelected={isSelected} onSelect={onSelect} onPointerDown={onPointerDown} objectId={objectId} type="grass">
             <instancedMesh
                 ref={instancedMeshRef}
                 args={[geometry, material, count]}
@@ -185,4 +186,5 @@ Grass.editorSchema = [
     { name: 'bottomColor', label: 'Bottom Clr', type: 'color', defaultValue: "#224411" },
     { name: 'topColor', label: 'Top Clr', type: 'color', defaultValue: "#66AA44" },
     { name: 'colorRatio', label: 'Color Ratio', type: 'number', step: 0.05, min: 0.05, max: 1, defaultValue: 0.5 },
+    { name: 'rotationY', label: 'Rotation Y', type: 'number', step: 1, min: 0, max: 360, defaultValue: 0 },
 ];

@@ -18,10 +18,11 @@ const Y_AXIS = new THREE.Vector3(0, 1, 0);
 
 // Pot/Planter
 export const Pot = React.memo(({ position, isSelected, onSelect, onPointerDown, objectId, globalAge=1,
-    topDiameter = 0.4, bottomDiameter = 0.3, height = 0.35, color = "#CD853F" // Peru (Terracotta-ish)
+    topDiameter = 0.4, bottomDiameter = 0.3, height = 0.35, color = "#CD853F", // Peru (Terracotta-ish)
+    rotationY = 0,
 }) => {
     return (
-        <ObjectBase position={[position[0], position[1] + height/2, position[2]]} isSelected={isSelected} onSelect={onSelect} onPointerDown={onPointerDown} objectId={objectId} type="pot">
+        <ObjectBase position={[position[0], position[1] + height/2, position[2]]} rotationY={rotationY} isSelected={isSelected} onSelect={onSelect} onPointerDown={onPointerDown} objectId={objectId} type="pot">
             <mesh castShadow receiveShadow>
                  <cylinderGeometry args={[topDiameter / 2, bottomDiameter / 2, height, 16]} />
                  <meshStandardMaterial color={color}/>
@@ -34,4 +35,5 @@ Pot.editorSchema = [
     { name: 'bottomDiameter', label: 'Bottom Ø', type: 'number', step: 0.05, min: 0.05, max: 1.4, defaultValue: 0.3 },
     { name: 'height', label: 'Height', type: 'number', step: 0.05, min: 0.1, max: 1.0, defaultValue: 0.35 },
     { name: 'color', label: 'Color', type: 'color', defaultValue: "#CD853F" },
+    { name: 'rotationY', label: 'Rotation Y', type: 'number', step: 1, min: 0, max: 360, defaultValue: 0 },
 ];

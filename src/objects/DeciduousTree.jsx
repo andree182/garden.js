@@ -38,6 +38,7 @@ export const DeciduousTree = React.memo(({ position, isSelected, onSelect, onPoi
     // Fruit Properties
     fruitType = 'apple',
     fruitDensity = 30,
+    rotationY = 0,
 }) => {
 
     const fruitMeshRef = useRef();
@@ -225,7 +226,7 @@ export const DeciduousTree = React.memo(({ position, isSelected, onSelect, onPoi
     }, [showFruit, fruitCount, currentFoliageRadiusXZ, currentFoliageRadiusY, foliageCenterY, fruitGeometry, fruitScale]); // Use scaled radii
 
     return (
-        <ObjectBase position={position} isSelected={isSelected} onSelect={onSelect} onPointerDown={onPointerDown} objectId={objectId} type="deciduous_tree">
+        <ObjectBase position={position} rotationY={rotationY} isSelected={isSelected} onSelect={onSelect} onPointerDown={onPointerDown} objectId={objectId} type="deciduous_tree">
             {/* Single Main Trunk */}
             <mesh position={[0, currentTrunkHeight / 2, 0]} scale={[currentTrunkDiameter / trunkDiameter || 0.01, currentTrunkHeight / trunkHeight || 0.01, currentTrunkDiameter / trunkDiameter || 0.01]} castShadow>
                 <cylinderGeometry args={[trunkDiameter * 0.4, trunkDiameter * 0.5, trunkHeight, 8]} />
@@ -271,4 +272,5 @@ DeciduousTree.editorSchema = [
     { name: 'branchColor', label: 'Branch Clr', type: 'color', defaultValue: null }, // Allow separate branch color
     { name: 'foliageColor', label: 'Summer Clr', type: 'color', defaultValue: "#559040" },
     { name: 'fruitType', label: 'Fruit Type', type: 'select', options: ['apple', 'pear', 'plum', 'none'], defaultValue: 'apple' },
+    { name: 'rotationY', label: 'Rotation Y', type: 'number', step: 1, min: 0, max: 360, defaultValue: 0 },
 ];

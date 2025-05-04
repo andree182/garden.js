@@ -427,6 +427,13 @@ export const SceneWithLogic = forwardRef(
                     )
                     );
                 },
+                updateObjectRotationY: (id, newRotationY) => {
+                    // Normalize rotation to 0-360 range
+                    const normalizedRotation = ((newRotationY % 360) + 360) % 360;
+                    setObjects(prev => prev.map(obj =>
+                       obj.id === id ? { ...obj, rotationY: normalizedRotation } : obj
+                   ));
+               },
                 getObjects: () => [...objects],
                 getObjectProperties: (id) => {
                     const obj = objects.find((o) => o != null && o.id === id);
