@@ -185,6 +185,42 @@ export default function PlanEditor() {
         whiteSpace: "nowrap",
     });
 
+    const getModeButtonStyle = (mode) => {
+        const isActive = currentMode === mode;
+        return {
+            width: '36px',
+            height: '36px',
+            borderRadius: '50%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            border: 'none',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+            background: isActive ? 'linear-gradient(135deg, #4CAF50, #45a049)' : 'transparent',
+            color: isActive ? 'white' : '#aaa',
+            boxShadow: isActive ? '0 4px 12px rgba(76, 175, 80, 0.4)' : 'none',
+            outline: 'none',
+        };
+    };
+
+    const getActionButtonStyle = () => {
+        return {
+            width: '34px',
+            height: '34px',
+            borderRadius: '50%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            border: 'none',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+            background: 'transparent',
+            color: '#aaa',
+            outline: 'none',
+        };
+    };
+
     useEffect(() => {
         if (selectedObjectId !== null && sceneLogicRef.current) {
             const props =
@@ -720,6 +756,30 @@ export default function PlanEditor() {
                         </div>
                     );
                 })}
+                <button
+                    onClick={handleRemoveSelected}
+                    style={{
+                        ...getButtonStyle(false, false),
+                        marginTop: "10px",
+                        backgroundColor: "#c62828",
+                        border: "1px solid #d32f2f",
+                        color: "#fff",
+                        textAlign: "center",
+                        width: "100%",
+                        padding: "6px 8px",
+                        borderRadius: "4px",
+                        display: "block",
+                        cursor: "pointer"
+                    }}
+                    onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = '#b71c1c';
+                    }}
+                    onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = '#c62828';
+                    }}
+                >
+                    Delete Object
+                </button>
             </div>
         );
     };
@@ -923,6 +983,8 @@ export default function PlanEditor() {
         );
     };
 
+
+
     const handleExportObjectList = useCallback(() => {
         const allObjects = sceneLogicRef.current?.getObjects();
         if (!allObjects || allObjects.length === 0) {
@@ -999,13 +1061,19 @@ export default function PlanEditor() {
         const handleMouseMove = (e) => {
             setMouseScreenPos({ x: e.clientX, y: e.clientY });
         };
+        const handleBlur = () => {
+            setIsShiftPressed(false);
+            setHoveredCoordinate(null);
+        };
         window.addEventListener("keydown", handleShiftKeyDown);
         window.addEventListener("keyup", handleShiftKeyUp);
         window.addEventListener("mousemove", handleMouseMove);
+        window.addEventListener("blur", handleBlur);
         return () => {
             window.removeEventListener("keydown", handleShiftKeyDown);
             window.removeEventListener("keyup", handleShiftKeyUp);
             window.removeEventListener("mousemove", handleMouseMove);
+            window.removeEventListener("blur", handleBlur);
         };
     }, []);
 
@@ -1037,55 +1105,213 @@ export default function PlanEditor() {
                     boxSizing: "border-box",
                 }}
             >
-                <strong>Actions:</strong>
-                <br />
-                <button onClick={handleShowIntro} style={getButtonStyle()}>Intro</button>
-                <button onClick={handleReset} style={getButtonStyle()}>New</button>
-                <button onClick={onLoadClick} style={getButtonStyle()}>Load</button>
-                <button onClick={onSaveClick} style={getButtonStyle()}>Save</button>
-                <button
-                    onClick={handleExportObjectList}
-                    style={getButtonStyle()}
-                >
-                    Export List
-                </button>
-                <button
-                    onClick={handleRemoveSelected}
-                    style={getButtonStyle(false, selectedObjectId === null)}
-                >
-                    Remove
-                </button>
+                {/* 1. File Actions */}
+                <div style={{ marginBottom: "12px" }}>
+                    <strong>Actions:</strong>
+                    <div style={{ display: "flex", gap: "6px", marginTop: "6px" }}>
+                        <button
+                            style={getActionButtonStyle()}
+                            onClick={handleShowIntro}
+                            title="Intro Guide"
+                            onMouseEnter={(e) => {
+                                e.currentTarget.style.background = 'rgba(255,255,255,0.08)';
+                                e.currentTarget.style.color = '#fff';
+                            }}
+                            onMouseLeave={(e) => {
+                                e.currentTarget.style.background = 'transparent';
+                                e.currentTarget.style.color = '#aaa';
+                            }}
+                        >
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <circle cx="12" cy="12" r="10"/>
+                                <line x1="12" y1="16" x2="12" y2="12"/>
+                                <line x1="12" y1="8" x2="12.01" y2="8"/>
+                            </svg>
+                        </button>
+
+                        <button
+                            style={getActionButtonStyle()}
+                            onClick={handleReset}
+                            title="New Project"
+                            onMouseEnter={(e) => {
+                                e.currentTarget.style.background = 'rgba(255,255,255,0.08)';
+                                e.currentTarget.style.color = '#fff';
+                            }}
+                            onMouseLeave={(e) => {
+                                e.currentTarget.style.background = 'transparent';
+                                e.currentTarget.style.color = '#aaa';
+                            }}
+                        >
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                <polyline points="14 2 14 8 20 8"/>
+                                <line x1="12" y1="18" x2="12" y2="12"/>
+                                <line x1="9" y1="15" x2="15" y2="15"/>
+                            </svg>
+                        </button>
+
+                        <button
+                            style={getActionButtonStyle()}
+                            onClick={onLoadClick}
+                            title="Load Project"
+                            onMouseEnter={(e) => {
+                                e.currentTarget.style.background = 'rgba(255,255,255,0.08)';
+                                e.currentTarget.style.color = '#fff';
+                            }}
+                            onMouseLeave={(e) => {
+                                e.currentTarget.style.background = 'transparent';
+                                e.currentTarget.style.color = '#aaa';
+                            }}
+                        >
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                                <path d="M2 10h20"/>
+                            </svg>
+                        </button>
+
+                        <button
+                            style={getActionButtonStyle()}
+                            onClick={onSaveClick}
+                            title="Save Project"
+                            onMouseEnter={(e) => {
+                                e.currentTarget.style.background = 'rgba(255,255,255,0.08)';
+                                e.currentTarget.style.color = '#fff';
+                            }}
+                            onMouseLeave={(e) => {
+                                e.currentTarget.style.background = 'transparent';
+                                e.currentTarget.style.color = '#aaa';
+                            }}
+                        >
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                                <polyline points="17 21 17 13 7 13 7 21"/>
+                                <polyline points="7 3 7 8 15 8"/>
+                            </svg>
+                        </button>
+
+                        <button
+                            style={getActionButtonStyle()}
+                            onClick={handleExportObjectList}
+                            title="Export Object List"
+                            onMouseEnter={(e) => {
+                                e.currentTarget.style.background = 'rgba(255,255,255,0.08)';
+                                e.currentTarget.style.color = '#fff';
+                            }}
+                            onMouseLeave={(e) => {
+                                e.currentTarget.style.background = 'transparent';
+                                e.currentTarget.style.color = '#aaa';
+                            }}
+                        >
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                {/* 2. Mode */}
+                <div style={{ marginBottom: "12px", borderTop: "1px solid #555", paddingTop: "8px" }}>
+                    <strong>Mode:</strong>
+                    <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
+                        <button
+                            style={getModeButtonStyle("select")}
+                            onClick={() => handleSetMode("select")}
+                            title="Select & Move Objects (Esc)"
+                            onMouseEnter={(e) => {
+                                if (currentMode !== "select") {
+                                    e.currentTarget.style.background = 'rgba(255,255,255,0.08)';
+                                    e.currentTarget.style.color = '#fff';
+                                }
+                            }}
+                            onMouseLeave={(e) => {
+                                if (currentMode !== "select") {
+                                    e.currentTarget.style.background = 'transparent';
+                                    e.currentTarget.style.color = '#aaa';
+                                }
+                            }}
+                        >
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z" />
+                                <path d="M13 13l6 6" />
+                            </svg>
+                        </button>
+
+                        <button
+                            style={getModeButtonStyle("place")}
+                            onClick={() => handleSetMode("place")}
+                            title="Place Objects (Trees, Shrubs, Flowers)"
+                            onMouseEnter={(e) => {
+                                if (currentMode !== "place") {
+                                    e.currentTarget.style.background = 'rgba(255,255,255,0.08)';
+                                    e.currentTarget.style.color = '#fff';
+                                }
+                            }}
+                            onMouseLeave={(e) => {
+                                if (currentMode !== "place") {
+                                    e.currentTarget.style.background = 'transparent';
+                                    e.currentTarget.style.color = '#aaa';
+                                }
+                            }}
+                        >
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <line x1="12" y1="5" x2="12" y2="19" />
+                                <line x1="5" y1="12" x2="19" y2="12" />
+                            </svg>
+                        </button>
+
+                        <button
+                            style={getModeButtonStyle("terrain")}
+                            onClick={() => handleSetMode("terrain")}
+                            title="Edit Terrain Height (Shift+Click to lower)"
+                            onMouseEnter={(e) => {
+                                if (currentMode !== "terrain") {
+                                    e.currentTarget.style.background = 'rgba(255,255,255,0.08)';
+                                    e.currentTarget.style.color = '#fff';
+                                }
+                            }}
+                            onMouseLeave={(e) => {
+                                if (currentMode !== "terrain") {
+                                    e.currentTarget.style.background = 'transparent';
+                                    e.currentTarget.style.color = '#aaa';
+                                }
+                            }}
+                        >
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M4 15l4-4 4 4 5-5 3 3H2v-2z" />
+                            </svg>
+                        </button>
+
+                        <button
+                            style={getModeButtonStyle("paint-color")}
+                            onClick={() => handleSetMode("paint-color")}
+                            title="Paint Ground Color"
+                            onMouseEnter={(e) => {
+                                if (currentMode !== "paint-color") {
+                                    e.currentTarget.style.background = 'rgba(255,255,255,0.08)';
+                                    e.currentTarget.style.color = '#fff';
+                                }
+                            }}
+                            onMouseLeave={(e) => {
+                                if (currentMode !== "paint-color") {
+                                    e.currentTarget.style.background = 'transparent';
+                                    e.currentTarget.style.color = '#aaa';
+                                }
+                            }}
+                        >
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" />
+                                <circle cx="7.5" cy="10.5" r="1.5" fill="currentColor" />
+                                <circle cx="11.5" cy="7.5" r="1.5" fill="currentColor" />
+                                <circle cx="16.5" cy="9.5" r="1.5" fill="currentColor" />
+                                <circle cx="15.5" cy="14.5" r="1.5" fill="currentColor" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
 
                 {/* console.log("[PlanEditor] Rendering with showCoordinates:", showCoordinates) */}
-                <div style={{ marginBottom: "8px" }}>
-                    <strong>Mode:</strong>
-                    <br />
-                    {/* Explicit Mode Buttons */}
-                    <button
-                        style={getButtonStyle(currentMode == "place")}
-                        onClick={() => handleSetMode("place")}
-                    >
-                        Place
-                    </button>
-                    <button
-                        style={getButtonStyle(currentMode == "select")}
-                        onClick={() => handleSetMode("select")}
-                    >
-                        Select/Move
-                    </button>
-                    <button
-                        style={getButtonStyle(currentMode == "terrain")}
-                        onClick={() => handleSetMode("terrain")}
-                    >
-                        Edit Terrain
-                    </button>
-                    <button
-                        style={getButtonStyle(currentMode == "paint-color")}
-                        onClick={() => handleSetMode("paint-color")}
-                    >
-                        Paint Color
-                    </button>
-                </div>
+
                 {/* ... Actions, Grid Resize, Brush Size (only relevant in terrain mode?), Aging Slider ... */}
                 <div
                     style={{
@@ -1465,6 +1691,7 @@ export default function PlanEditor() {
             {renderAddObjectList()}
 
             {renderExportPopup()}
+
 
             {/* INTRO OVERLAY */}
             {showIntro && (

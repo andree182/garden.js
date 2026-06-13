@@ -24,6 +24,24 @@ export function Experience({
     const [draggingInfo, setDraggingInfo] = useState(null);
     const [isPaintingTerrain, setIsPaintingTerrain] = useState(false);
     const [isPaintingColor, setIsPaintingColor] = useState(false);
+
+    const draggingInfoRef = useRef(null);
+    const isPaintingTerrainRef = useRef(false);
+    const isPaintingColorRef = useRef(false);
+
+    const setDraggingInfoWithRef = (val) => {
+        draggingInfoRef.current = val;
+        setDraggingInfo(val);
+    };
+    const setIsPaintingTerrainWithRef = (val) => {
+        isPaintingTerrainRef.current = val;
+        setIsPaintingTerrain(val);
+    };
+    const setIsPaintingColorWithRef = (val) => {
+        isPaintingColorRef.current = val;
+        setIsPaintingColor(val);
+    };
+
     const [paintDirection, setPaintDirection] = useState(1);
     const [localHoveredPoint, setLocalHoveredPoint] = useState(null);
     const showCoordsDuringDrag = useRef(false);
@@ -108,7 +126,7 @@ export function Experience({
                     clickedObject.worldZ
                 ) ?? 0;
                 // Set potential drag info
-                setDraggingInfo({
+                setDraggingInfoWithRef({
                     id: objectId,
                     initialY: getWorldYBase(groundHeight) + DRAG_PLANE_OFFSET,
                     pointerId: event.pointerId,
@@ -121,13 +139,13 @@ export function Experience({
                 console.log("Potential Drag Start:", objectId);
             }
         },
-        [currentMode, onSelectObject, sceneLogicRef]
+        [currentMode, onSelectObject, sceneLogicRef, isShiftPressed]
     ); // Add currentMode dependency
 
     const handleGridPointerDown = useCallback(
         (event, gridX, gridZ) => {
             //console.log("GRID", event, gridX, gridZ);
-            if (draggingInfo || !sceneLogicRef.current) return; // Ignore grid clicks while dragging
+            if (draggingInfoRef.current || !sceneLogicRef.current) return; // Ignore grid clicks while dragging
 
             // --- Mode-Specific Actions ---
             if (selectedObjectToAdd) {
@@ -162,7 +180,7 @@ export function Experience({
                 // onInteractionEnd(); // Keep the object selection for further placing (do not reset mode/selection after adding)
             } else if (currentMode === "terrain") {
                 event.stopPropagation();
-                setIsPaintingTerrain(true);
+                setIsPaintingTerrainWithRef(true);
                 const dir = event.shiftKey ? -1 : 1;
                 setPaintDirection(dir);
 
@@ -183,7 +201,7 @@ export function Experience({
                 onSelectObject(null);
             } else if (currentMode === "paint-color") {
                 event.stopPropagation();
-                setIsPaintingColor(true);
+                setIsPaintingColorWithRef(true);
                 sceneLogicRef.current?.updateCellColor(
                     gridX,
                     gridZ,
@@ -197,7 +215,6 @@ export function Experience({
         [
             currentMode,
             selectedObjectToAdd,
-            draggingInfo,
             brushSize,
             sceneLogicRef,
             onInteractionEnd,
@@ -215,16 +232,22 @@ export function Experience({
 
     const handlePointerMove = useCallback(
         (event) => {
-            // console.log("move", event);
-            pointerRef.current.x = (event.clientX / window.innerWidth) * 2 - 1;
-            pointerRef.current.y =
-                -(event.clientY / window.innerHeight) * 2 + 1;
             if (!sceneLogicRef.current) return;
+
+            // Calculate pointer coordinate relative to canvas bounding client rect
+            if (gl.domElement) {
+                const rect = gl.domElement.getBoundingClientRect();
+                pointerRef.current.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+                pointerRef.current.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+            } else {
+                pointerRef.current.x = (event.clientX / window.innerWidth) * 2 - 1;
+                pointerRef.current.y = -(event.clientY / window.innerHeight) * 2 + 1;
+            }
 
             const ctrlPressed = event.ctrlKey;
 
             // If dragging, disable controls on first move
-            if (draggingInfo &&
+            if (draggingInfoRef.current &&
                 orbitControlsRef.current &&
                 orbitControlsRef.current.enabled) {
                 orbitControlsRef.current.enabled = false;
@@ -234,13 +257,13 @@ export function Experience({
             // --- Handle actual drag or paint based on state ---
             raycaster.setFromCamera(pointerRef.current, camera);
 
-            if (draggingInfo && dragPlaneRef.current) {
+            if (draggingInfoRef.current && dragPlaneRef.current) {
                 if (ctrlPressed) {
-                    const deltaX = event.clientX - draggingInfo.startX;
+                    const deltaX = event.clientX - draggingInfoRef.current.startX;
                     const rotationChange = deltaX * ROTATION_SENSITIVITY;
-                    const newRotationY = (draggingInfo.startRotationY + rotationChange) % 360;
-                    sceneLogicRef.current.updateObjectRotationY(draggingInfo.id, newRotationY);
-                    onObjectPropertyUpdate(draggingInfo.id, 'rotationY', newRotationY);
+                    const newRotationY = (draggingInfoRef.current.startRotationY + rotationChange) % 360;
+                    sceneLogicRef.current.updateObjectRotationY(draggingInfoRef.current.id, newRotationY);
+                    onObjectPropertyUpdate(draggingInfoRef.current.id, 'rotationY', newRotationY);
                 } else {
                     // Actual drag is happening
                     const intersects = raycaster.intersectObject(
@@ -249,13 +272,13 @@ export function Experience({
                     if (intersects.length > 0) {
                         const point = intersects[0].point;
                         sceneLogicRef.current.updateObjectPositionWorld(
-                            draggingInfo.id,
+                            draggingInfoRef.current.id,
                             point.x,
                             point.z
                         );
                     }
                 }
-            } else if (isPaintingTerrain) {
+            } else if (isPaintingTerrainRef.current) {
                 // Painting is happening (implicitly, currentMode must be 'terrain')
                 const { gridWidth, gridHeight } = sceneLogicRef.current.getGridDimensions();
                 const groundPlane = new THREE.Plane(
@@ -284,7 +307,7 @@ export function Experience({
                         );
                     }
                 }
-            } else if (isPaintingColor) {
+            } else if (isPaintingColorRef.current) {
                 // Painting color
                 const { gridWidth, gridHeight } = sceneLogicRef.current.getGridDimensions();
                 const groundPlane = new THREE.Plane(
@@ -313,9 +336,9 @@ export function Experience({
             }
 
             // --- Coordinate Ruler (when Shift is pressed or Dragging) ---
-            if (draggingInfo) {
+            if (draggingInfoRef.current) {
                 if (showCoordsDuringDrag.current) {
-                    const objProps = sceneLogicRef.current.getObjectProperties(draggingInfo.id);
+                    const objProps = sceneLogicRef.current.getObjectProperties(draggingInfoRef.current.id);
                     if (objProps) {
                         const height = sceneLogicRef.current.getGroundHeightAtWorld(objProps.worldX, objProps.worldZ);
                         const point = new THREE.Vector3(objProps.worldX, height, objProps.worldZ);
@@ -344,9 +367,6 @@ export function Experience({
             }
         },
         [
-            draggingInfo,
-            isPaintingTerrain,
-            isPaintingColor,
             paintDirection,
             raycaster,
             camera,
@@ -357,20 +377,19 @@ export function Experience({
             onObjectPropertyUpdate,
             isShiftPressed,
             onHoverUpdate,
-            localHoveredPoint
+            localHoveredPoint,
+            gl
         ]
     );
 
     const handlePointerUp = useCallback(
         (event) => {
-            // console.log("Pointer up", event);
             const pointerId = event.pointerId;
 
-            if (draggingInfo) {
-                // A drag actually occurred
+            if (draggingInfoRef.current) {
                 console.log("Pointer Up - Drag End");
-                gl.domElement.releasePointerCapture?.(pointerId); // Release capture first
-                setDraggingInfo(null);
+                gl.domElement.releasePointerCapture?.(pointerId);
+                setDraggingInfoWithRef(null);
                 if (orbitControlsRef.current)
                     orbitControlsRef.current.enabled = true;
                 
@@ -379,23 +398,21 @@ export function Experience({
                 suppressShiftCoords.current = true;
                 setLocalHoveredPoint(null);
                 onHoverUpdate?.(null);
-            } else if (isPaintingTerrain) {
-                // Painting ended
+            } else if (isPaintingTerrainRef.current) {
                 console.log("Pointer Up - Paint End");
-                setIsPaintingTerrain(false);
+                setIsPaintingTerrainWithRef(false);
                 if (orbitControlsRef.current)
                     orbitControlsRef.current.enabled = true;
                 gl.domElement.releasePointerCapture?.(pointerId);
-            } else if (isPaintingColor) {
-                // Color painting ended
+            } else if (isPaintingColorRef.current) {
                 console.log("Pointer Up - Color Paint End");
-                setIsPaintingColor(false);
+                setIsPaintingColorWithRef(false);
                 if (orbitControlsRef.current)
                     orbitControlsRef.current.enabled = true;
                 gl.domElement.releasePointerCapture?.(pointerId);
             }
         },
-        [draggingInfo, isPaintingTerrain, isPaintingColor, gl]
+        [gl, onHoverUpdate]
     );
 
     // Effect to add/remove global listeners
@@ -403,8 +420,8 @@ export function Experience({
         const domElement = gl.domElement;
         const moveHandler = (event) => handlePointerMove(event);
         const upHandler = (event) => handlePointerUp(event);
-        // Listen if dragging, actually dragging, or painting
-        if (draggingInfo || isPaintingTerrain || isPaintingColor) {
+        // Listen if dragging, painting, or Shift is pressed (for coordinate ruler)
+        if (draggingInfo || isPaintingTerrain || isPaintingColor || isShiftPressed) {
             domElement.addEventListener("pointermove", moveHandler);
             domElement.addEventListener("pointerup", upHandler);
         }
@@ -418,6 +435,7 @@ export function Experience({
         draggingInfo,
         isPaintingTerrain,
         isPaintingColor,
+        isShiftPressed,
         handlePointerMove,
         handlePointerUp,
         gl,
