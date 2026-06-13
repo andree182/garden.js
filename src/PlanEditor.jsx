@@ -157,6 +157,9 @@ export default function PlanEditor() {
     const [showObjectNames, setShowObjectNames] = useState(false);
     const [objectFilter, setObjectFilter] = useState('');
     const [exportText, setExportText] = useState(null);
+    const [isShiftPressed, setIsShiftPressed] = useState(false);
+    const [mouseScreenPos, setMouseScreenPos] = useState({ x: 0, y: 0 });
+    const [hoveredCoordinate, setHoveredCoordinate] = useState(null);
     const [sunAzimuth, setSunAzimuth] = useState(45); // Default: Northeast-ish
     const [sunElevation, setSunElevation] = useState(60); // Default: Fairly high sun
     const [currentMonth, setCurrentMonth] = useState(6);
@@ -980,6 +983,32 @@ export default function PlanEditor() {
         };
     }, [handleKeyDown]); // Re-attach if handler changes (due to dependencies)
 
+    // Effect to track Shift key press and mouse move for ruler coordinates
+    useEffect(() => {
+        const handleShiftKeyDown = (e) => {
+            if (e.key === "Shift") {
+                setIsShiftPressed(true);
+            }
+        };
+        const handleShiftKeyUp = (e) => {
+            if (e.key === "Shift") {
+                setIsShiftPressed(false);
+                setHoveredCoordinate(null);
+            }
+        };
+        const handleMouseMove = (e) => {
+            setMouseScreenPos({ x: e.clientX, y: e.clientY });
+        };
+        window.addEventListener("keydown", handleShiftKeyDown);
+        window.addEventListener("keyup", handleShiftKeyUp);
+        window.addEventListener("mousemove", handleMouseMove);
+        return () => {
+            window.removeEventListener("keydown", handleShiftKeyDown);
+            window.removeEventListener("keyup", handleShiftKeyUp);
+            window.removeEventListener("mousemove", handleMouseMove);
+        };
+    }, []);
+
     return (
         <div
             style={{
@@ -1537,9 +1566,38 @@ export default function PlanEditor() {
                         currentMonth={currentMonth}
                         isOrthographic={isOrthographic}
                         showObjectNames={showObjectNames}
+                        isShiftPressed={isShiftPressed}
+                        onHoverUpdate={setHoveredCoordinate}
                     />
                 </Canvas>
             </div>
+
+            {/* Coordinates Tooltip overlay */}
+            {hoveredCoordinate && (
+                <div style={{
+                    position: 'fixed',
+                    left: `${mouseScreenPos.x + 15}px`,
+                    top: `${mouseScreenPos.y + 15}px`,
+                    pointerEvents: 'none',
+                    background: 'rgba(20, 20, 20, 0.85)',
+                    backdropFilter: 'blur(3px)',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    borderRadius: '6px',
+                    padding: '8px 12px',
+                    color: '#fff',
+                    fontFamily: 'Inter, sans-serif',
+                    fontSize: '11px',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+                    zIndex: 2000,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '2px',
+                }}>
+                    <div style={{ color: '#ff3333', fontWeight: 'bold' }}>X: <span style={{ fontFamily: 'monospace', color: '#fff' }}>{hoveredCoordinate.x.toFixed(2)}m</span></div>
+                    <div style={{ color: '#00ff66', fontWeight: 'bold' }}>Y (Height): <span style={{ fontFamily: 'monospace', color: '#fff' }}>{hoveredCoordinate.y.toFixed(2)}m</span></div>
+                    <div style={{ color: '#3333ff', fontWeight: 'bold' }}>Z: <span style={{ fontFamily: 'monospace', color: '#fff' }}>{hoveredCoordinate.z.toFixed(2)}m</span></div>
+                </div>
+            )}
         </div>
     );
 }

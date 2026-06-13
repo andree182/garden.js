@@ -12,7 +12,9 @@ export function Experience({
     selectedObjectId, // Read-only, selection managed by PlanEditor via onSelectObject
     globalAge, brushSize, // Props for rendering/API
     sceneLogicRef, onSelectObject, onInteractionEnd, getInitialObjectId, showCoordinates, paintColor, sunAzimuth, sunElevation, terrainPaintMode, absolutePaintHeight, currentMonth, isOrthographic, showObjectNames,
-    onObjectPropertyUpdate
+    onObjectPropertyUpdate,
+    isShiftPressed,
+    onHoverUpdate
 }) {
     const { raycaster, pointer, camera, gl } = useThree();
     const orbitControlsRef = useRef();
@@ -23,6 +25,9 @@ export function Experience({
     const [isPaintingTerrain, setIsPaintingTerrain] = useState(false);
     const [isPaintingColor, setIsPaintingColor] = useState(false);
     const [paintDirection, setPaintDirection] = useState(1);
+    const [localHoveredPoint, setLocalHoveredPoint] = useState(null);
+    const showCoordsDuringDrag = useRef(false);
+    const suppressShiftCoords = useRef(false);
     const pointerRef = useRef({ x: 0, y: 0 });
     const ROTATION_SENSITIVITY = 1;
 
@@ -79,6 +84,14 @@ export function Experience({
         }
     }, [isOrthographic, camera]);
 
+    useEffect(() => {
+        if (!isShiftPressed) {
+            suppressShiftCoords.current = false;
+            setLocalHoveredPoint(null);
+            onHoverUpdate?.(null);
+        }
+    }, [isShiftPressed, onHoverUpdate]);
+
     // --- Event Handlers (Now strictly check currentMode) ---
     const handleObjectPointerDown = useCallback(
         (event, objectId, objectType) => {
@@ -102,6 +115,7 @@ export function Experience({
                     startRotationY: clickedObject.rotationY || 0,
                     startX: event.clientX,
                 });
+                showCoordsDuringDrag.current = event.shiftKey || isShiftPressed;
                 if (orbitControlsRef.current) orbitControlsRef.current.enabled = false;
                 event.target?.setPointerCapture(event.pointerId);
                 console.log("Potential Drag Start:", objectId);
@@ -260,11 +274,11 @@ export function Experience({
                         gridX < gridWidth &&
                         gridZ >= 0 &&
                         gridZ < gridHeight) {
-                        // Call applyTerrainBrush with mode and target height
+                        const dir = paintDirection;
                         sceneLogicRef.current.applyTerrainBrush(
                             gridX,
                             gridZ,
-                            HEIGHT_MODIFIER * paintDirection, // deltaHeight (used in relative mode)
+                            HEIGHT_MODIFIER * dir, // deltaHeight (used in relative mode)
                             terrainPaintMode,
                             absolutePaintHeight // Pass mode and target
                         );
@@ -297,6 +311,37 @@ export function Experience({
                     } // Paint cell under pointer
                 }
             }
+
+            // --- Coordinate Ruler (when Shift is pressed or Dragging) ---
+            if (draggingInfo) {
+                if (showCoordsDuringDrag.current) {
+                    const objProps = sceneLogicRef.current.getObjectProperties(draggingInfo.id);
+                    if (objProps) {
+                        const height = sceneLogicRef.current.getGroundHeightAtWorld(objProps.worldX, objProps.worldZ);
+                        const point = new THREE.Vector3(objProps.worldX, height, objProps.worldZ);
+                        setLocalHoveredPoint(point);
+                        onHoverUpdate?.({ x: point.x, y: point.y, z: point.z });
+                    }
+                } else {
+                    if (localHoveredPoint) setLocalHoveredPoint(null);
+                    onHoverUpdate?.(null);
+                }
+            } else if (isShiftPressed && !suppressShiftCoords.current) {
+                const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+                const intersectionPoint = new THREE.Vector3();
+                if (raycaster.ray.intersectPlane(groundPlane, intersectionPoint)) {
+                    const height = sceneLogicRef.current.getGroundHeightAtWorld(intersectionPoint.x, intersectionPoint.z);
+                    intersectionPoint.y = height;
+                    setLocalHoveredPoint(intersectionPoint.clone());
+                    onHoverUpdate?.({ x: intersectionPoint.x, y: intersectionPoint.y, z: intersectionPoint.z });
+                } else {
+                    setLocalHoveredPoint(null);
+                    onHoverUpdate?.(null);
+                }
+            } else {
+                if (localHoveredPoint) setLocalHoveredPoint(null);
+                onHoverUpdate?.(null);
+            }
         },
         [
             draggingInfo,
@@ -310,6 +355,9 @@ export function Experience({
             terrainPaintMode,
             absolutePaintHeight,
             onObjectPropertyUpdate,
+            isShiftPressed,
+            onHoverUpdate,
+            localHoveredPoint
         ]
     );
 
@@ -325,6 +373,12 @@ export function Experience({
                 setDraggingInfo(null);
                 if (orbitControlsRef.current)
                     orbitControlsRef.current.enabled = true;
+                
+                // Hide coords after drag ends (independent of Shift key state)
+                showCoordsDuringDrag.current = false;
+                suppressShiftCoords.current = true;
+                setLocalHoveredPoint(null);
+                onHoverUpdate?.(null);
             } else if (isPaintingTerrain) {
                 // Painting ended
                 console.log("Pointer Up - Paint End");
@@ -416,6 +470,31 @@ export function Experience({
                 minPolarAngle={isOrthographic ? 0.01 : 0}
                 maxPolarAngle={isOrthographic ? 0.01 : Math.PI / 2.1}
                 makeDefault />
+
+            {/* 3D Coordinate Ruler Overlay */}
+            {isShiftPressed && localHoveredPoint && (
+                <group>
+                    {/* X-axis ruler line (red) */}
+                    <mesh position={[0, localHoveredPoint.y + 0.02, localHoveredPoint.z]} scale={[100, 0.01, 0.01]}>
+                        <boxGeometry />
+                        <meshBasicMaterial color="#ff3333" transparent opacity={0.5} depthWrite={false} />
+                    </mesh>
+                    
+                    {/* Z-axis ruler line (blue) */}
+                    <mesh position={[localHoveredPoint.x, localHoveredPoint.y + 0.02, 0]} scale={[0.01, 0.01, 100]}>
+                        <boxGeometry />
+                        <meshBasicMaterial color="#3333ff" transparent opacity={0.5} depthWrite={false} />
+                    </mesh>
+
+                    {/* Vertical height ruler line to Y=0 (green) */}
+                    {localHoveredPoint.y > 0.01 && (
+                        <mesh position={[localHoveredPoint.x, localHoveredPoint.y / 2, localHoveredPoint.z]} scale={[0.01, localHoveredPoint.y, 0.01]}>
+                            <boxGeometry />
+                            <meshBasicMaterial color="#00ff66" transparent opacity={0.7} depthWrite={false} />
+                        </mesh>
+                    )}
+                </group>
+            )}
         </>
     );
 }
