@@ -44,7 +44,7 @@ export const SmallFruitBush = memo(({ position, isSelected, onSelect, onPointerD
 
     // --- Fruit Geometry/Material ---
     const [fruitGeometry, fruitMaterial] = useMemo(() => {
-        const geom = new THREE.SphereGeometry(fruitSize, 5, 4); // Low poly sphere for berries
+        const geom = new THREE.SphereGeometry(fruitSize, 4, 3); // Low poly sphere for berries
         const mat = new THREE.MeshStandardMaterial({ color: fruitColor, roughness: 0.7, metalness: 0.1 });
         return [geom, mat];
     }, [fruitSize, fruitColor]); // Depend on editable props
@@ -115,17 +115,17 @@ export const SmallFruitBush = memo(({ position, isSelected, onSelect, onPointerD
                  <group>
                      {/* Left/lower sphere */}
                      <mesh position={[-radiusXZ * 0.2, foliageCenterY, 0]} castShadow receiveShadow>
-                         <sphereGeometry args={[radiusXZ * 0.8, 12, 10]} />
+                         <sphereGeometry args={[radiusXZ * 0.8, 4, 3]} />
                          <meshStandardMaterial color={foliageColor} roughness={0.8} metalness={0.1} />
                      </mesh>
                      {/* Right/lower sphere */}
                      <mesh position={[radiusXZ * 0.25, foliageCenterY * 0.9, 0.05]} castShadow receiveShadow>
-                         <sphereGeometry args={[radiusXZ * 0.72, 12, 10]} />
+                         <sphereGeometry args={[radiusXZ * 0.72, 4, 3]} />
                          <meshStandardMaterial color={foliageColor} roughness={0.8} metalness={0.1} />
                      </mesh>
                      {/* Top center sphere */}
                      <mesh position={[0, foliageCenterY * 1.12, -0.05]} castShadow receiveShadow>
-                         <sphereGeometry args={[radiusXZ * 0.75, 12, 10]} />
+                         <sphereGeometry args={[radiusXZ * 0.75, 4, 3]} />
                          <meshStandardMaterial color={foliageColor} roughness={0.8} metalness={0.1} />
                      </mesh>
                  </group>

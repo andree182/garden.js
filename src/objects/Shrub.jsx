@@ -28,7 +28,7 @@ export const Shrub = React.memo(({ position, isSelected, onSelect, onPointerDown
     }, [isSpring, color]);
 
     const [leafGeo, leafMat] = useMemo(() => [
-        new THREE.SphereGeometry(1, 8, 6),
+        new THREE.SphereGeometry(1, 4, 3),
         new THREE.MeshStandardMaterial({ color: leafColor, roughness: 0.9, depthWrite: false })
     ], [leafColor]);
 
@@ -37,7 +37,7 @@ export const Shrub = React.memo(({ position, isSelected, onSelect, onPointerDown
         new THREE.MeshStandardMaterial({ color: "#5C4033", roughness: 1.0 })
     ], []);
 
-    const numLeaves = 25;
+    const numLeaves = 10;
     const numBranches = 12;
 
     useLayoutEffect(() => {
@@ -64,7 +64,7 @@ export const Shrub = React.memo(({ position, isSelected, onSelect, onPointerDown
 
                 tempObject.position.set(x, adjustedY, z);
                 tempObject.rotation.set(random() * Math.PI, random() * Math.PI, random() * Math.PI);
-                const scale = currentRadius * (0.4 + random() * 0.5); // Varying sizes
+                const scale = currentRadius * (0.4 + random() * 0.5) * 1.5; // Varying sizes, scaled up to compensate for fewer leaves
                 tempObject.scale.setScalar(scale);
                 tempObject.updateMatrix();
                 leafMesh.setMatrixAt(i, tempObject.matrix);

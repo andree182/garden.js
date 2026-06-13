@@ -19,8 +19,8 @@ const stemGeometry = new THREE.CylinderGeometry(0.008, 0.01, 1, 5); // radiusTop
 stemGeometry.translate(0, 0.5, 0); // Pivot at bottom
 const leafGeometry = new THREE.BoxGeometry(0.03, 0.004, 0.012);
 leafGeometry.translate(0.015, 0, 0); // Pivot at leaf base
-const headGeometrySphere = new THREE.SphereGeometry(1, 8, 6); // Base radius 1, scaled later
-const headGeometryCone = new THREE.ConeGeometry(1, 1, 6); // Base radius 1, height 1, scaled later
+const headGeometrySphere = new THREE.SphereGeometry(1, 4, 3); // Base radius 1, scaled later
+const headGeometryCone = new THREE.ConeGeometry(1, 1, 4); // Base radius 1, height 1, scaled later
 headGeometryCone.translate(0, 0.5, 0); // Pivot cone base
 
 export const SmallFlower = memo(({ position, isSelected, onSelect, onPointerDown, objectId, rotationY = 0, globalAge = 1, currentMonth = 6,
@@ -63,7 +63,7 @@ export const SmallFlower = memo(({ position, isSelected, onSelect, onPointerDown
     const instanceCount = useMemo(() => {
         if (!hasStems) return 0;
         const area = Math.PI * patchRadius ** 2;
-        const calculatedCount = Math.floor(density * area * 10); // Adjust multiplier
+        const calculatedCount = Math.floor(density * area * 4); // Adjust multiplier (reduced to 0.4x count)
         return Math.min(MAX_FLOWERS_PER_PATCH, Math.max(0, calculatedCount));
     }, [hasStems, density, patchRadius]);
 

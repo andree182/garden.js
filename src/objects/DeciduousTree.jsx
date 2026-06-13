@@ -112,7 +112,7 @@ export const DeciduousTree = React.memo(({
 
     const [leafClusterGeo, leafClusterMat] = useMemo(() => [
         // Simple sphere cluster
-        new THREE.SphereGeometry(1, 7, 5), // Base radius 1 for scaling, slightly more detail
+        new THREE.SphereGeometry(1, 4, 3), // Base radius 1 for scaling, 0.1x complexity (4x3 instead of 7x5)
         new THREE.MeshStandardMaterial({
             color: currentFoliageColor,
             roughness: 0.8,
@@ -134,9 +134,9 @@ export const DeciduousTree = React.memo(({
     const [fruitGeometry, fruitMaterial, fruitScale] = useMemo(() => {
          let geom, color, scale = 1.0;
          switch (fruitType) {
-            case 'pear': geom = new THREE.SphereGeometry(0.05*ageScale, 8, 6); color = "#D1E231"; scale = 1.0; break;
-            case 'plum': geom = new THREE.SphereGeometry(0.04*ageScale, 8, 6); color = "#6A0DAD"; scale = 0.8; break;
-            case 'apple': default: geom = new THREE.SphereGeometry(0.045*ageScale, 8, 6); color = "#FF6347"; scale = 1.0; break;
+            case 'pear': geom = new THREE.SphereGeometry(0.05*ageScale, 4, 3); color = "#D1E231"; scale = 1.0; break;
+            case 'plum': geom = new THREE.SphereGeometry(0.04*ageScale, 4, 3); color = "#6A0DAD"; scale = 0.8; break;
+            case 'apple': default: geom = new THREE.SphereGeometry(0.045*ageScale, 4, 3); color = "#FF6347"; scale = 1.0; break;
          }
          const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.6, metalness: 0.1 });
          return [geom, mat, scale * ageScale]; // Scale fruit with age too
@@ -174,7 +174,7 @@ export const DeciduousTree = React.memo(({
         const numLevels = Math.min(MAX_BRANCH_LEVELS, Math.max(1, Math.floor(branchLevels * globalAge))); // Age affects levels
 
         // Calculate ellipsoid bounds for branch clipping
-        const baseClusterSize = leafDistribution === 'volume' ? currentFoliageRadiusXZ * 0.5 : leafClusterSize * ageScale;
+        const baseClusterSize = (leafDistribution === 'volume' ? currentFoliageRadiusXZ * 0.5 : leafClusterSize * ageScale) * 1.6; // Scale up to compensate for fewer clusters
         const innerRadiusXZ = Math.max(0.1, currentFoliageRadiusXZ - baseClusterSize * 0.4);
         const innerRadiusY = Math.max(0.1, currentFoliageRadiusY - baseClusterSize * 0.4);
         const center = new THREE.Vector3(0, foliageCenterY, 0);
@@ -281,7 +281,8 @@ export const DeciduousTree = React.memo(({
                     }
 
                     // --- Add Leaf Cluster(s) ---
-                    if (hasLeaves && leafClusters.length < MAX_LEAF_CLUSTERS) {
+                    // Tune down leaf cluster count to ~30% with random() < 0.3 for 0.1x overall complexity
+                    if (hasLeaves && leafClusters.length < MAX_LEAF_CLUSTERS && random() < 0.3) {
                         const isCanopyBranch = leafDistribution === 'volume' && (childLevel >= numLevels - 1 || isTerminal);
                         const isTip = leafDistribution === 'tips' && isTerminal;
                         
@@ -295,7 +296,7 @@ export const DeciduousTree = React.memo(({
                              leafClusters.push({ matrix: tempObject.matrix.clone() });
                              
                              // If it's a canopy branch and it's long, place one at midpoint too for density
-                             if (isCanopyBranch && branchData.length > cSize * 1.5 && leafClusters.length < MAX_LEAF_CLUSTERS) {
+                             if (isCanopyBranch && branchData.length > cSize * 1.5 && leafClusters.length < MAX_LEAF_CLUSTERS && random() < 0.3) {
                                  tempObject.position.lerpVectors(branchData.startPoint, branchData.endPoint, 0.5);
                                  tempObject.rotation.set(random() * Math.PI * 2, random() * Math.PI * 2, random() * Math.PI * 2);
                                  tempObject.scale.setScalar(cSize * 0.9);

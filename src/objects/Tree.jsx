@@ -51,19 +51,19 @@ export const Tree = React.memo(({ position, isSelected, onSelect, onPointerDown,
             
             {/* Foliage - Bottom Layer */}
             <mesh position={[0, layer1Y, 0]} castShadow receiveShadow>
-                <coneGeometry args={[layer1Radius, layer1Height, 12]} />
+                <coneGeometry args={[layer1Radius, layer1Height, 5]} />
                 <meshStandardMaterial color={foliageColor} roughness={0.8} />
             </mesh>
             
             {/* Foliage - Middle Layer */}
             <mesh position={[0, layer2Y, 0]} castShadow receiveShadow>
-                <coneGeometry args={[layer2Radius, layer2Height, 12]} />
+                <coneGeometry args={[layer2Radius, layer2Height, 5]} />
                 <meshStandardMaterial color={foliageColor} roughness={0.8} />
             </mesh>
             
             {/* Foliage - Top Layer */}
             <mesh position={[0, layer3Y, 0]} castShadow receiveShadow>
-                <coneGeometry args={[layer3Radius, layer3Height, 12]} />
+                <coneGeometry args={[layer3Radius, layer3Height, 5]} />
                 <meshStandardMaterial color={foliageColor} roughness={0.8} />
             </mesh>
         </ObjectBase>
