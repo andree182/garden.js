@@ -4,7 +4,8 @@ import React, { useRef, useState, useCallback, useMemo, useLayoutEffect, useEffe
 import { useFrame } from '@react-three/fiber';
 import { Box } from '@react-three/drei';
 import * as THREE from 'three';
-import { ObjectBase } from './ObjectBase'; // Import base component
+import { ObjectBase } from './ObjectBase';
+import { createRandom } from '../utils'; // Import base component
 
 // --- Config ---
 const lerp = THREE.MathUtils.lerp;
@@ -31,6 +32,8 @@ export const Grass = React.memo(({ position, isSelected, onSelect, onPointerDown
     currentMonth = 6,
     rotationY = 0,
  }) => {
+    const random = createRandom(objectId || (position ? position.join(',') : 'obj'));
+
 
     const instancedMeshRef = useRef();
     const baseBladeWidth = 0.025; // Width of a single blade plane
@@ -126,14 +129,14 @@ export const Grass = React.memo(({ position, isSelected, onSelect, onPointerDown
 
         for (let i = 0; i < count; i++) {
             // --- Position ---
-            const radius = Math.sqrt(Math.random()) * maxRadius;
-            const angle = Math.random() * Math.PI * 2;
+            const radius = Math.sqrt(random()) * maxRadius;
+            const angle = random() * Math.PI * 2;
             const x = Math.cos(angle) * radius;
             const z = Math.sin(angle) * radius;
             tempObject.position.set(x, 0, z);
 
             // --- Rotation (Outward Tilt + Random Y) ---
-            const randomYRotation = Math.random() * Math.PI * 0.3 - Math.PI * 0.15; // Smaller random twist
+            const randomYRotation = random() * Math.PI * 0.3 - Math.PI * 0.15; // Smaller random twist
             const radialRatio = maxRadius > 0.01 ? radius / maxRadius : 0;
             const maxTilt = Math.PI / 2 * (1 - straightness); // 0 tilt if straightness=1, PI/2 if 0
             const tiltAngle = maxTilt * radialRatio; // Linear interpolation of tilt

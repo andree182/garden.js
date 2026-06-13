@@ -2,6 +2,7 @@
 import React, { memo, useMemo, useRef, useLayoutEffect, useState } from 'react';
 import * as THREE from 'three';
 import { ObjectBase } from './ObjectBase';
+import { createRandom } from '../utils';
 import { Sphere } from '@react-three/drei'; // Keep for fruits
 
 const lerp = THREE.MathUtils.lerp;
@@ -23,6 +24,8 @@ export const SmallFruitBush = memo(({ position, isSelected, onSelect, onPointerD
     fruitDensity = 150, // Higher density for small berries
     fruitPresenceMonths = [7, 8, 9], // Months when fruit is visible (July-Sep default)
 }) => {
+    const random = createRandom(objectId || (position ? position.join(',') : 'obj'));
+
     const fruitMeshRef = useRef();
 
     // --- Seasonal/State Calculations ---
@@ -64,9 +67,9 @@ export const SmallFruitBush = memo(({ position, isSelected, onSelect, onPointerD
 
         for (let i = 0; i < fruitCount; i++) {
             // Position near surface of the potentially flattened ellipsoid
-            const phi = Math.acos(2 * Math.random() - 1);
-            const theta = Math.random() * Math.PI * 2;
-            const offsetFactor = 0.9 + Math.random() * 0.2; // 0.9 to 1.1
+            const phi = Math.acos(2 * random() - 1);
+            const theta = random() * Math.PI * 2;
+            const offsetFactor = 0.9 + random() * 0.2; // 0.9 to 1.1
 
             const xSurf = radiusXZ * Math.sin(phi) * Math.cos(theta);
             const ySurfRelative = radiusY * Math.cos(phi); // Y relative to center
@@ -97,25 +100,40 @@ export const SmallFruitBush = memo(({ position, isSelected, onSelect, onPointerD
 
     return (
         <ObjectBase position={position} isSelected={isSelected} onSelect={onSelect} onPointerDown={onPointerDown} objectId={objectId} type="small_fruit_bush" rotationY={rotationY}>
-             {/* Foliage - Scaled sphere, potentially clipped */}
-            {hasLeaves && (
-                 <mesh
-                    position={[0, foliageCenterY, 0]}
-                    scale={[radiusXZ * 2, radiusY * 2, radiusXZ * 2]} // Scale sphere geometry
-                    castShadow
-                    receiveShadow
-                    // Optional: Use clipping plane if perfect flat bottom is needed
-                    // material-clippingPlanes={ flattenBottom > 0 ? [new THREE.Plane(new THREE.Vector3(0, 1, 0), -(radiusY * (1 - flattenBottom)) + foliageCenterY)] : null }
-                 >
-                    <sphereGeometry args={[0.5, 16, 12]} />{/* Base radius 0.5 */}
-                    {/* Simple material for now */}
-                    <meshStandardMaterial color={foliageColor} roughness={0.8} metalness={0.1} side={THREE.DoubleSide} />
-                </mesh>
-            )}
-             {/* Fruits */}
-             {hasFruit && fruitCount > 0 && fruitGeometry && fruitMaterial && (
-                <instancedMesh ref={fruitMeshRef} args={[fruitGeometry, fruitMaterial, fruitCount]} castShadow />
+             {/* Stems supporting the bush (visible year-round) */}
+             <mesh position={[-0.03, foliageCenterY * 0.4, 0.01]} rotation={[0.1, 0, 0.15]} castShadow>
+                 <cylinderGeometry args={[0.01 * globalAge, 0.018 * globalAge, foliageCenterY * 0.8, 6]} />
+                 <meshStandardMaterial color="#8B5A2B" roughness={0.9} />
+             </mesh>
+             <mesh position={[0.03, foliageCenterY * 0.45, -0.02]} rotation={[-0.1, 0, -0.15]} castShadow>
+                 <cylinderGeometry args={[0.009 * globalAge, 0.016 * globalAge, foliageCenterY * 0.9, 6]} />
+                 <meshStandardMaterial color="#8B5A2B" roughness={0.9} />
+             </mesh>
+
+             {/* Foliage - Clustered spheres */}
+             {hasLeaves && (
+                 <group>
+                     {/* Left/lower sphere */}
+                     <mesh position={[-radiusXZ * 0.2, foliageCenterY, 0]} castShadow receiveShadow>
+                         <sphereGeometry args={[radiusXZ * 0.8, 12, 10]} />
+                         <meshStandardMaterial color={foliageColor} roughness={0.8} metalness={0.1} />
+                     </mesh>
+                     {/* Right/lower sphere */}
+                     <mesh position={[radiusXZ * 0.25, foliageCenterY * 0.9, 0.05]} castShadow receiveShadow>
+                         <sphereGeometry args={[radiusXZ * 0.72, 12, 10]} />
+                         <meshStandardMaterial color={foliageColor} roughness={0.8} metalness={0.1} />
+                     </mesh>
+                     {/* Top center sphere */}
+                     <mesh position={[0, foliageCenterY * 1.12, -0.05]} castShadow receiveShadow>
+                         <sphereGeometry args={[radiusXZ * 0.75, 12, 10]} />
+                         <meshStandardMaterial color={foliageColor} roughness={0.8} metalness={0.1} />
+                     </mesh>
+                 </group>
              )}
+              {/* Fruits */}
+              {hasFruit && fruitCount > 0 && fruitGeometry && fruitMaterial && (
+                 <instancedMesh ref={fruitMeshRef} args={[fruitGeometry, fruitMaterial, fruitCount]} castShadow />
+              )}
         </ObjectBase>
     );
 });

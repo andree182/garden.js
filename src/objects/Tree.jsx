@@ -28,17 +28,43 @@ export const Tree = React.memo(({ position, isSelected, onSelect, onPointerDown,
     const currentFoliageHeight = lerp(0.1, maxFoliageHeight, globalAge);
     const currentFoliageRadius = lerp(0.05, maxFoliageRadius, globalAge);
 
+    // Stacked pine tree foliage layers (3 overlapping cones)
+    const layer1Height = currentFoliageHeight * 0.5;
+    const layer1Radius = currentFoliageRadius;
+    const layer1Y = currentTrunkHeight + layer1Height / 2;
+
+    const layer2Height = currentFoliageHeight * 0.45;
+    const layer2Radius = currentFoliageRadius * 0.75;
+    const layer2Y = currentTrunkHeight + layer1Height * 0.6 + layer2Height / 2;
+
+    const layer3Height = currentFoliageHeight * 0.4;
+    const layer3Radius = currentFoliageRadius * 0.55;
+    const layer3Y = currentTrunkHeight + layer1Height * 0.6 + layer2Height * 0.6 + layer3Height / 2;
+
     return (
         <ObjectBase position={position} isSelected={isSelected} onSelect={onSelect} onPointerDown={onPointerDown} objectId={objectId} type="tree">
             {/* Trunk */}
-            <mesh position={[0, currentTrunkHeight / 2, 0]} scale={[1, currentTrunkHeight / maxTrunkHeight || 0.01, 1]} castShadow>
-                <cylinderGeometry args={[0.15, 0.2, maxTrunkHeight, 8]} />
-                <meshStandardMaterial color={trunkColor} /> {/* Use prop color */}
+            <mesh position={[0, currentTrunkHeight / 2, 0]} castShadow>
+                <cylinderGeometry args={[0.04 * globalAge, 0.12 * globalAge, currentTrunkHeight, 8]} />
+                <meshStandardMaterial color={trunkColor} roughness={0.9} />
             </mesh>
-            {/* Foliage */}
-            <mesh position={[0, currentTrunkHeight + currentFoliageHeight / 2 - 0.05, 0]} scale={[currentFoliageRadius / maxFoliageRadius || 0.01, currentFoliageHeight / maxFoliageHeight || 0.01, currentFoliageRadius / maxFoliageRadius || 0.01]} castShadow>
-                <coneGeometry args={[maxFoliageRadius, maxFoliageHeight, 16]} />
-                <meshStandardMaterial color={foliageColor} /> {/* Use prop color */}
+            
+            {/* Foliage - Bottom Layer */}
+            <mesh position={[0, layer1Y, 0]} castShadow receiveShadow>
+                <coneGeometry args={[layer1Radius, layer1Height, 12]} />
+                <meshStandardMaterial color={foliageColor} roughness={0.8} />
+            </mesh>
+            
+            {/* Foliage - Middle Layer */}
+            <mesh position={[0, layer2Y, 0]} castShadow receiveShadow>
+                <coneGeometry args={[layer2Radius, layer2Height, 12]} />
+                <meshStandardMaterial color={foliageColor} roughness={0.8} />
+            </mesh>
+            
+            {/* Foliage - Top Layer */}
+            <mesh position={[0, layer3Y, 0]} castShadow receiveShadow>
+                <coneGeometry args={[layer3Radius, layer3Height, 12]} />
+                <meshStandardMaterial color={foliageColor} roughness={0.8} />
             </mesh>
         </ObjectBase>
     );

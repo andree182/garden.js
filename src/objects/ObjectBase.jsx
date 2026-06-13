@@ -3,15 +3,18 @@ import React, { useRef, useState, useCallback, useMemo, useLayoutEffect, useEffe
 import { useFrame } from '@react-three/fiber';
 import { Box } from '@react-three/drei';
 import * as THREE from 'three';
+import { createRandom } from '../utils';
 
 // --- Config ---
 const SELECTION_COLOR = '#FF00FF'; // Keep consistent or pass as prop if needed
 
 // --- ObjectBase: Wrapper with common logic (selection, animation, pointer down) ---
 export const ObjectBase = ({ children, position, isSelected, onSelect, onPointerDown, objectId, type, rotationY = 0 }) => {
+    const random = createRandom(objectId || (position ? position.join(',') : 'obj'));
+    
     const groupRef = useRef();
-    const [animOffset] = useState(() => Math.random() * Math.PI * 2);
-    const [freqMult] = useState(() => 0.8 + Math.random() * 0.4);
+    const [animOffset] = useState(() => random() * Math.PI * 2);
+    const [freqMult] = useState(() => 0.8 + random() * 0.4);
 
     const shouldAnimate = useMemo(() =>
         ['tree', 'deciduous_tree', 'shrub', 'grass', 'hedge'].includes(type),

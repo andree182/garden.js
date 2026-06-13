@@ -2,6 +2,7 @@
 import React, { memo, useMemo, useRef, useLayoutEffect, useState } from 'react';
 import * as THREE from 'three';
 import { ObjectBase } from './ObjectBase';
+import { createRandom } from '../utils';
 import { Sphere } from '@react-three/drei';
 
 const lerp = THREE.MathUtils.lerp;
@@ -19,6 +20,8 @@ export const GroundFruit = memo(({ position, isSelected, onSelect, onPointerDown
     leafDensity = 80,
     fruitPresenceMonths = [6, 7], // June/July for strawberries
 }) => {
+    const random = createRandom(objectId || (position ? position.join(',') : 'obj'));
+
     const fruitMeshRef = useRef();
     const leafMeshRef = useRef(); // Instanced mesh for leaves
 
@@ -70,13 +73,13 @@ export const GroundFruit = memo(({ position, isSelected, onSelect, onPointerDown
         if (!hasFruit || !fruitMeshRef.current || fruitCount === 0 || !fruitGeometry || !fruitMaterial) { if(fruitMeshRef.current) fruitMeshRef.current.count = 0; return; }
         const mesh = fruitMeshRef.current;
         for (let i = 0; i < fruitCount; i++) {
-            const radius = Math.sqrt(Math.random()) * patchRadius;
-            const angle = Math.random() * Math.PI * 2;
+            const radius = Math.sqrt(random()) * patchRadius;
+            const angle = random() * Math.PI * 2;
             const x = Math.cos(angle) * radius;
             const z = Math.sin(angle) * radius;
             // Position slightly above ground plane
             tempObject.position.set(x, currentFruitSize * 0.5 + 0.005, z);
-            tempObject.rotation.set(Math.random() * 0.2, Math.random() * Math.PI * 2, Math.random() * 0.2); // Slight random tilt
+            tempObject.rotation.set(random() * 0.2, random() * Math.PI * 2, random() * 0.2); // Slight random tilt
             tempObject.scale.setScalar(1);
             tempObject.updateMatrix(); mesh.setMatrixAt(i, tempObject.matrix);
         }
@@ -87,13 +90,13 @@ export const GroundFruit = memo(({ position, isSelected, onSelect, onPointerDown
         if (!hasLeaves || !leafMeshRef.current || leafCount === 0 || !leafGeometry || !leafMaterial) { if(leafMeshRef.current) leafMeshRef.current.count = 0; return; }
         const mesh = leafMeshRef.current;
         for (let i = 0; i < leafCount; i++) {
-            const radius = Math.sqrt(Math.random()) * patchRadius;
-            const angle = Math.random() * Math.PI * 2;
+            const radius = Math.sqrt(random()) * patchRadius;
+            const angle = random() * Math.PI * 2;
             const x = Math.cos(angle) * radius;
             const z = Math.sin(angle) * radius;
             // Position flat on ground plane, slightly above to avoid z-fighting
             tempObject.position.set(x, 0.006, z);
-            tempObject.rotation.set(-Math.PI / 2 + (Math.random() * 0.4 - 0.2), Math.random() * Math.PI * 2, 0); // Lay flat with random twist/tilt
+            tempObject.rotation.set(-Math.PI / 2 + (random() * 0.4 - 0.2), random() * Math.PI * 2, 0); // Lay flat with random twist/tilt
             tempObject.scale.setScalar(1);
             tempObject.updateMatrix(); mesh.setMatrixAt(i, tempObject.matrix);
         }

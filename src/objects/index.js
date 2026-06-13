@@ -23,6 +23,7 @@ import { Bench } from './Bench';
 import { Pot } from './Pot';
 import { Boulder } from './Boulder';
 import { SwingingSet } from './SwingingSet';
+import { Greenhouse } from './Greenhouse';
 
 // Create the component map
 export const ObjectComponents = {
@@ -48,6 +49,7 @@ export const ObjectComponents = {
     pot: Pot,
     boulder: Boulder,
     swing_set: SwingingSet,
+    greenhouse: Greenhouse,
 };
 
 // Re-export configurations

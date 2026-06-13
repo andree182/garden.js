@@ -4,6 +4,7 @@ import React, { useRef, useMemo, useLayoutEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { ObjectBase } from './ObjectBase';
+import { createRandom } from '../utils';
 
 // --- Constants ---
 const lerp = THREE.MathUtils.lerp;
@@ -22,10 +23,10 @@ const MAX_FRUITS = 500; // Keep fruit limit
 const MAX_BRANCH_LEVELS = 4; // How many times branches can split
 
 // --- Helper ---
-function getRandomPointInCone(baseDir, angleDeg) {
+function getRandomPointInCone(baseDir, angleDeg, random) {
     const angleRad = THREE.MathUtils.degToRad(angleDeg);
-    const z = Math.random() * (1 - Math.cos(angleRad)) + Math.cos(angleRad); // Cosine-weighted distribution
-    const phi = Math.random() * Math.PI * 2;
+    const z = random() * (1 - Math.cos(angleRad)) + Math.cos(angleRad); // Cosine-weighted distribution
+    const phi = random() * Math.PI * 2;
     const x = Math.sqrt(1 - z * z) * Math.cos(phi);
     const y = Math.sqrt(1 - z * z) * Math.sin(phi);
 
@@ -64,10 +65,11 @@ export const DeciduousTree = React.memo(({
     fruitDensity = 30, // Density relative to conceptual volume
     rotationY = 0,
 }) => {
+    const random = createRandom(objectId || (position ? position.join(',') : 'obj'));
+
 
     const branchMeshRef = useRef();
     const leafClusterMeshRef = useRef();
-    const foliageMeshRef = useRef(); // For volume foliage
     const fruitMeshRef = useRef(); // Keep fruit separate
 
     // --- Seasonal Calculations ---
@@ -110,47 +112,50 @@ export const DeciduousTree = React.memo(({
 
     const [leafClusterGeo, leafClusterMat] = useMemo(() => [
         // Simple sphere cluster
-        new THREE.SphereGeometry(1, 6, 4), // Base radius 1 for scaling
+        new THREE.SphereGeometry(1, 7, 5), // Base radius 1 for scaling, slightly more detail
         new THREE.MeshStandardMaterial({
             color: currentFoliageColor,
             roughness: 0.8,
             metalness: 0.1,
             transparent: true,
-             opacity: 0.9, // Slightly transparent clusters
-             depthWrite: false // Often looks better for foliage clusters
+            opacity: leafDistribution === 'volume' ? foliageOpacity : 0.9,
+            depthWrite: false // Often looks better for foliage clusters
         })
-    ], []); // Color updated in effect
+    ], [leafDistribution, foliageOpacity, currentFoliageColor]); // Recreate if opacity/distribution changes
 
-     const [foliageVolumeGeo, foliageVolumeMat] = useMemo(() => [
-        new THREE.SphereGeometry(0.5, 12, 8), // Base radius 0.5
-        new THREE.MeshStandardMaterial({
-             color: currentFoliageColor,
-             roughness: 0.8,
-             metalness: 0.1,
-             transparent: true,
-             opacity: foliageOpacity,
-             depthWrite: foliageOpacity > 0.95,
-             side: THREE.DoubleSide // Render inside for sparse look
-         })
-     ], [foliageOpacity]); // Color updated in effect
+    // --- Fruit Definitions ---
+    const fruitCount = useMemo(() => {
+        if (!showFruit || fruitDensity <= 0) return 0;
+        const volume = (4 / 3) * Math.PI * currentFoliageRadiusXZ * currentFoliageRadiusY * currentFoliageRadiusXZ;
+        const calculatedCount = Math.floor(fruitDensity * volume * 0.5 * globalAge); // Age affects fruit
+        return Math.min(MAX_FRUITS, Math.max(0, calculatedCount));
+    }, [showFruit, fruitDensity, currentFoliageRadiusXZ, currentFoliageRadiusY, globalAge]);
 
+    const [fruitGeometry, fruitMaterial, fruitScale] = useMemo(() => {
+         let geom, color, scale = 1.0;
+         switch (fruitType) {
+            case 'pear': geom = new THREE.SphereGeometry(0.05*ageScale, 8, 6); color = "#D1E231"; scale = 1.0; break;
+            case 'plum': geom = new THREE.SphereGeometry(0.04*ageScale, 8, 6); color = "#6A0DAD"; scale = 0.8; break;
+            case 'apple': default: geom = new THREE.SphereGeometry(0.045*ageScale, 8, 6); color = "#FF6347"; scale = 1.0; break;
+         }
+         const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.6, metalness: 0.1 });
+         return [geom, mat, scale * ageScale]; // Scale fruit with age too
+    }, [fruitType, ageScale]);
 
     // --- Branch & Leaf Cluster Generation ---
     useLayoutEffect(() => {
         const branches = []; // Array to hold { matrix, endPoint, direction, diameter, length, level, isTerminal }
-        const leafClusters = []; // Array to hold { matrix } for tips
+        const leafClusters = []; // Array to hold { matrix } for tips/volume
         const branchMesh = branchMeshRef.current;
         const leafMesh = leafClusterMeshRef.current;
-        const foliageVolume = foliageMeshRef.current;
-        if (!branchMesh)
-            return;
+        
+        if (!branchMesh) return;
 
         // Update materials that change with season/props
         branchMat.color.set(branchColor || trunkColor);
-        if (leafMesh)
+        if (leafMesh) {
             leafClusterMat.color.set(currentFoliageColor);
-        if (foliageVolume)
-            foliageVolumeMat.color.set(currentFoliageColor);
+        }
 
         // Initial "branch" is the trunk segment from which others sprout
         const trunkTopY = currentTrunkHeight;
@@ -168,22 +173,25 @@ export const DeciduousTree = React.memo(({
 
         const numLevels = Math.min(MAX_BRANCH_LEVELS, Math.max(1, Math.floor(branchLevels * globalAge))); // Age affects levels
 
+        // Calculate ellipsoid bounds for branch clipping
+        const baseClusterSize = leafDistribution === 'volume' ? currentFoliageRadiusXZ * 0.5 : leafClusterSize * ageScale;
+        const innerRadiusXZ = Math.max(0.1, currentFoliageRadiusXZ - baseClusterSize * 0.4);
+        const innerRadiusY = Math.max(0.1, currentFoliageRadiusY - baseClusterSize * 0.4);
+        const center = new THREE.Vector3(0, foliageCenterY, 0);
+
         for (let level = 1; level <= numLevels; level++) {
             const nextLevelBranches = [];
-            if (branchesInLevel.length === 0)
-                break;
+            if (branchesInLevel.length === 0) break;
 
             for (const parent of branchesInLevel) {
-                if (parent.isTerminal)
-                    continue; // Don't branch from terminal
+                if (parent.isTerminal) continue; // Don't branch from terminal
 
                 // How many children? More for lower levels & higher density/branchiness
                 const baseChildren = branchDensity * lerp(1.5, 0.5, (level -1) / numLevels); // Fewer branches at higher levels
-                const numChildren = Math.max(1, Math.floor(baseChildren * (0.5 + Math.random() * 1.0))); // Add randomness
+                const numChildren = Math.max(1, Math.floor(baseChildren * (0.5 + random() * 1.0))); // Add randomness
 
                 for (let i = 0; i < numChildren; i++) {
-                    if (branches.length >= MAX_BRANCH_SEGMENTS)
-                        break; // Limit total segments
+                    if (branches.length >= MAX_BRANCH_SEGMENTS) break;
 
                     // --- Child Properties ---
                     const childLevel = parent.level + 1;
@@ -199,22 +207,55 @@ export const DeciduousTree = React.memo(({
                     // Apply angle bias (relative to horizontal plane maybe?) - simplified: bias up/down
                     const biasQuat = new THREE.Quaternion().setFromAxisAngle(
                         tempVec.set(parent.direction.z, 0, -parent.direction.x).normalize(), // Axis perpendicular to parent dir in XZ
-                        THREE.MathUtils.degToRad(branchAngleBias * (0.5 + Math.random() * 0.5)) // Randomize bias slightly
+                        THREE.MathUtils.degToRad(branchAngleBias * (0.5 + random() * 0.5)) // Randomize bias slightly
                     );
                     baseDir.applyQuaternion(biasQuat);
                     // Add random deviation within a cone (wider cone for lower levels/high branchiness)
                     const randomAngle = lerp(60, 30, levelFactor) * lerp(1.2, 0.8, branchiness);
-                    const direction = getRandomPointInCone(baseDir, randomAngle);
+                    const direction = getRandomPointInCone(baseDir, randomAngle, random);
 
                     // Length: Based on max, level, randomness. Shorter for higher levels.
-                    const length = currentBranchLengthMax * lerp(0.3, 1.0, levelFactor) * (0.7 + Math.random() * 0.6);
+                    let length = currentBranchLengthMax * lerp(0.3, 1.0, levelFactor) * (0.7 + random() * 0.6);
+
+                    // --- Clip branch to foliage ellipsoid ---
+                    const startLocal = startPoint.clone().sub(center);
+                    startLocal.x /= innerRadiusXZ;
+                    startLocal.y /= innerRadiusY;
+                    startLocal.z /= innerRadiusXZ;
+
+                    const dirLocal = direction.clone();
+                    dirLocal.x /= innerRadiusXZ;
+                    dirLocal.y /= innerRadiusY;
+                    dirLocal.z /= innerRadiusXZ;
+
+                    const A = dirLocal.lengthSq();
+                    const B = startLocal.dot(dirLocal);
+                    const C = startLocal.lengthSq() - 1.0;
+
+                    let tIntersect = length;
+                    let hitBoundary = false;
+                    if (C > 0) {
+                        tIntersect = 0.02; // Start point already outside, keep it very short
+                        hitBoundary = true;
+                    } else {
+                        const discriminant = B * B - A * C;
+                        if (discriminant >= 0) {
+                            const t = (-B + Math.sqrt(discriminant)) / A;
+                            if (t > 0 && t < length) {
+                                tIntersect = t;
+                                hitBoundary = true;
+                            }
+                        }
+                    }
+                    
+                    length = Math.max(0.02, tIntersect);
 
                     // Diameter: Taper based on factor and level
-                    const diameter = parent.diameter * lerp(branchTaperFactor, 1.0, 0.2) * (0.8 + Math.random() * 0.4); // Taper more aggresively initially
+                    const diameter = parent.diameter * lerp(branchTaperFactor, 1.0, 0.2) * (0.8 + random() * 0.4); // Taper more aggresively initially
                     const clampedDiameter = Math.max(0.01, diameter); // Ensure minimum thickness
 
-                    // Is Terminal? Based on level or random chance
-                    const isTerminal = childLevel >= numLevels || Math.random() > lerp(0.8, 0.2, levelFactor); // Higher chance to terminate at higher levels
+                    // Is Terminal? Based on level, random chance, or hitting the boundary
+                    let isTerminal = childLevel >= numLevels || random() > lerp(0.8, 0.2, levelFactor) || hitBoundary; 
 
                     // --- Create Matrix ---
                     tempObject.position.copy(startPoint);
@@ -239,23 +280,35 @@ export const DeciduousTree = React.memo(({
                         nextLevelBranches.push(branchData);
                     }
 
-                    // --- Add Leaf Cluster if Terminal ---
-                    if (isTerminal && leafDistribution === 'tips' && hasLeaves && leafClusters.length < MAX_LEAF_CLUSTERS) {
-                         tempObject.position.copy(branchData.endPoint);
-                        // Random rotation for cluster
-                        tempObject.rotation.set(Math.random() * Math.PI * 2, Math.random() * Math.PI * 2, Math.random() * Math.PI * 2);
-                        const clusterScale = leafClusterSize * ageScale * (0.8 + Math.random() * 0.4);
-                        tempObject.scale.setScalar(clusterScale);
-                        tempObject.updateMatrix();
-                        leafClusters.push({ matrix: tempObject.matrix.clone() });
+                    // --- Add Leaf Cluster(s) ---
+                    if (hasLeaves && leafClusters.length < MAX_LEAF_CLUSTERS) {
+                        const isCanopyBranch = leafDistribution === 'volume' && (childLevel >= numLevels - 1 || isTerminal);
+                        const isTip = leafDistribution === 'tips' && isTerminal;
+                        
+                        if (isCanopyBranch || isTip) {
+                             // Place cluster at endPoint
+                             tempObject.position.copy(branchData.endPoint);
+                             tempObject.rotation.set(random() * Math.PI * 2, random() * Math.PI * 2, random() * Math.PI * 2);
+                             const cSize = baseClusterSize * (0.8 + random() * 0.4);
+                             tempObject.scale.setScalar(cSize);
+                             tempObject.updateMatrix();
+                             leafClusters.push({ matrix: tempObject.matrix.clone() });
+                             
+                             // If it's a canopy branch and it's long, place one at midpoint too for density
+                             if (isCanopyBranch && branchData.length > cSize * 1.5 && leafClusters.length < MAX_LEAF_CLUSTERS) {
+                                 tempObject.position.lerpVectors(branchData.startPoint, branchData.endPoint, 0.5);
+                                 tempObject.rotation.set(random() * Math.PI * 2, random() * Math.PI * 2, random() * Math.PI * 2);
+                                 tempObject.scale.setScalar(cSize * 0.9);
+                                 tempObject.updateMatrix();
+                                 leafClusters.push({ matrix: tempObject.matrix.clone() });
+                             }
+                        }
                     }
                 }
-                if (branches.length >= MAX_BRANCH_SEGMENTS)
-                    break;
+                if (branches.length >= MAX_BRANCH_SEGMENTS) break;
             }
             branchesInLevel = nextLevelBranches;
-            if (branches.length >= MAX_BRANCH_SEGMENTS)
-                break;
+            if (branches.length >= MAX_BRANCH_SEGMENTS) break;
         }
 
         // --- Update Instanced Meshes ---
@@ -264,25 +317,55 @@ export const DeciduousTree = React.memo(({
         branchMesh.instanceMatrix.needsUpdate = true;
         branchMesh.computeBoundingSphere(); // Important for frustum culling
 
-        if (leafMesh && leafDistribution === 'tips') {
+        if (leafMesh) {
             leafMesh.count = leafClusters.length;
             leafClusters.forEach((l, i) => leafMesh.setMatrixAt(i, l.matrix));
             leafMesh.instanceMatrix.needsUpdate = true;
             leafMesh.computeBoundingSphere();
             leafMesh.visible = hasLeaves; // Hide clusters in winter
-        } else if (leafMesh) {
-            leafMesh.count = 0; // Ensure it's cleared if not 'tips'
-            leafMesh.visible = false;
         }
 
-        // Hide/show volume foliage
-        if (foliageVolume) {
-             foliageVolume.visible = hasLeaves && leafDistribution === 'volume';
-             if (foliageVolume.visible) {
-                 // Scale the single volume mesh
-                 foliageVolume.position.set(0, foliageCenterY, 0);
-                 foliageVolume.scale.set(currentFoliageRadiusXZ*2, currentFoliageRadiusY*2, currentFoliageRadiusXZ*2);
-             }
+        const fruitMesh = fruitMeshRef.current;
+        if (fruitMesh) {
+            if (showFruit && fruitCount > 0 && leafClusters.length > 0) {
+                const actualFruitCount = Math.min(fruitCount, leafClusters.length * 3); // Limit per cluster
+                for (let i = 0; i < actualFruitCount; i++) {
+                    // Pick a random leaf cluster to hang from
+                    const clusterIndex = Math.floor(random() * leafClusters.length);
+                    const cluster = leafClusters[clusterIndex];
+                    
+                    // Extract position and scale from cluster matrix
+                    tempVec.setFromMatrixPosition(cluster.matrix);
+                    tempVec2.setFromMatrixScale(cluster.matrix);
+                    const cRadius = tempVec2.x; // assuming uniform scale
+                    
+                    // Calculate outward direction from the center of the tree canopy
+                    const treeCenter = new THREE.Vector3(0, foliageCenterY, 0);
+                    const dirFromCenter = tempVec.clone().sub(treeCenter).normalize();
+                    
+                    // Add some noise to the direction so they scatter naturally around the outer edge
+                    const randomSpread = new THREE.Vector3((random() - 0.5), (random() - 0.5), (random() - 0.5)).multiplyScalar(1.5);
+                    const fruitDir = dirFromCenter.add(randomSpread).normalize();
+                    
+                    // Push the fruit to the very border of the cluster (or slightly outside)
+                    const r = cRadius * (0.9 + random() * 0.25); 
+                    
+                    const offsetX = fruitDir.x * r;
+                    const offsetY = fruitDir.y * r;
+                    const offsetZ = fruitDir.z * r;
+                    
+                    tempObject.position.set(tempVec.x + offsetX, tempVec.y + offsetY, tempVec.z + offsetZ);
+                    tempObject.rotation.set(random() * Math.PI, random() * Math.PI, random() * Math.PI);
+                    tempObject.scale.setScalar(fruitScale);
+                    tempObject.updateMatrix();
+                    fruitMesh.setMatrixAt(i, tempObject.matrix);
+                }
+                fruitMesh.count = actualFruitCount;
+                fruitMesh.instanceMatrix.needsUpdate = true;
+                fruitMesh.computeBoundingSphere();
+            } else {
+                fruitMesh.count = 0;
+            }
         }
     }, [
         // Include ALL props that affect geometry/appearance
@@ -290,58 +373,11 @@ export const DeciduousTree = React.memo(({
         branchiness, branchDensity, branchLevels, branchLengthMax, branchTaperFactor,
         branchAngleBias, branchColor, foliageDiameter, foliageScaleXZ, foliageScaleY,
         foliageColor, foliageOpacity, leafDistribution, leafClusterSize, hasLeaves,
+        // Also fruit properties
+        showFruit, fruitCount, fruitScale,
         // Memoized geometry/material refs are stable, but include if needed
-        branchGeo, branchMat, leafClusterGeo, leafClusterMat, foliageVolumeGeo, foliageVolumeMat
+        branchGeo, branchMat, leafClusterGeo, leafClusterMat
     ]);
-
-    // --- Fruit Instancing (Keep similar logic, position based on conceptual volume) ---
-     const fruitCount = useMemo(() => {
-        if (!showFruit || fruitDensity <= 0) return 0;
-        const volume = (4 / 3) * Math.PI * currentFoliageRadiusXZ * currentFoliageRadiusY * currentFoliageRadiusXZ;
-        const calculatedCount = Math.floor(fruitDensity * volume * 0.5 * globalAge); // Age affects fruit
-        return Math.min(MAX_FRUITS, Math.max(0, calculatedCount));
-     }, [showFruit, fruitDensity, currentFoliageRadiusXZ, currentFoliageRadiusY, globalAge]);
-
-     const [fruitGeometry, fruitMaterial, fruitScale] = useMemo(() => {
-         // ... (same fruit geometry/material logic as before) ...
-         let geom, color, scale = 1.0;
-         switch (fruitType) { /* ... cases ... */
-            case 'pear': geom = new THREE.SphereGeometry(0.05*ageScale, 8, 6); color = "#D1E231"; scale = 1.0; break;
-            case 'plum': geom = new THREE.SphereGeometry(0.04*ageScale, 8, 6); color = "#6A0DAD"; scale = 0.8; break;
-            case 'apple': default: geom = new THREE.SphereGeometry(0.045*ageScale, 8, 6); color = "#FF6347"; scale = 1.0; break;
-         }
-         const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.6, metalness: 0.1 });
-         return [geom, mat, scale * ageScale]; // Scale fruit with age too
-     }, [fruitType, ageScale]);
-
-     useLayoutEffect(() => {
-         if (!showFruit || !fruitMeshRef.current || fruitCount === 0) {
-             if(fruitMeshRef.current) fruitMeshRef.current.count = 0;
-             return;
-         }
-         const mesh = fruitMeshRef.current;
-         for (let i = 0; i < fruitCount; i++) {
-            // Position randomly within the conceptual foliage ellipsoid volume
-             const u = Math.random();
-             const v = Math.random();
-             const theta = u * Math.PI * 2;
-             const phi = Math.acos(2 * v - 1);
-             const r = Math.cbrt(Math.random()); // Uniform distribution within sphere volume
-
-             const x = r * currentFoliageRadiusXZ * Math.sin(phi) * Math.cos(theta);
-             const y = r * currentFoliageRadiusY * Math.cos(phi);
-             const z = r * currentFoliageRadiusXZ * Math.sin(phi) * Math.sin(theta);
-
-             tempObject.position.set(x, y + foliageCenterY, z); // Offset by foliage center
-             tempObject.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
-             tempObject.scale.setScalar(fruitScale);
-             tempObject.updateMatrix();
-             mesh.setMatrixAt(i, tempObject.matrix);
-         }
-         mesh.count = fruitCount;
-         mesh.instanceMatrix.needsUpdate = true;
-         mesh.computeBoundingSphere();
-     }, [showFruit, fruitCount, currentFoliageRadiusXZ, currentFoliageRadiusY, foliageCenterY, fruitGeometry, fruitScale]); // Use scaled radii
 
     return (
         <ObjectBase position={position} rotationY={rotationY} isSelected={isSelected} onSelect={onSelect} onPointerDown={onPointerDown} objectId={objectId} type="deciduous_tree">
@@ -366,29 +402,15 @@ export const DeciduousTree = React.memo(({
                 receiveShadow
             />
 
-             {/* Foliage Volume (Conditional) */}
-            {leafDistribution === 'volume' && (
-                <mesh
-                    ref={foliageMeshRef}
-                    geometry={foliageVolumeGeo}
-                    material={foliageVolumeMat}
-                    // Position and scale are set in the effect
-                    castShadow={foliageOpacity > 0.5} // Only cast shadow if reasonably opaque
-                    visible={false} // Visibility controlled by effect
-                 />
-            )}
-
-             {/* Leaf Clusters (Conditional) */}
-             {leafDistribution === 'tips' && (
-                 <instancedMesh
-                    ref={leafClusterMeshRef}
-                    args={[null, null, MAX_LEAF_CLUSTERS]}
-                    geometry={leafClusterGeo}
-                    material={leafClusterMat}
-                    castShadow
-                    visible={false} // Visibility controlled by effect
-                 />
-             )}
+             {/* Leaf Clusters */}
+             <instancedMesh
+                 ref={leafClusterMeshRef}
+                 args={[null, null, MAX_LEAF_CLUSTERS]}
+                 geometry={leafClusterGeo}
+                 material={leafClusterMat}
+                 castShadow
+                 visible={false} // Visibility controlled by effect
+             />
 
             {/* Fruits (Conditional) */}
              {showFruit && fruitCount > 0 && (

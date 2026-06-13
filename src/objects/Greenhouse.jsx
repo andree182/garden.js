@@ -2,6 +2,7 @@
 import React, { memo, useMemo } from 'react';
 import * as THREE from 'three';
 import { ObjectBase } from './ObjectBase';
+import { createRandom } from '../utils';
 
 // Helper to create simple saddle roof geometry for the glass roof
 function createSaddleRoofGeometry(width, length, height, roofHeight) {
@@ -27,6 +28,8 @@ export const Greenhouse = memo(({ position, isSelected, onSelect, onPointerDown,
     glassOpacity = 0.35,
     showInterior = true
 }) => {
+    const random = createRandom(objectId || (position ? position.join(',') : 'obj'));
+
     // Base Y offset for centering
     const basePosY = height / 2;
 
@@ -78,7 +81,7 @@ export const Greenhouse = memo(({ position, isSelected, onSelect, onPointerDown,
             plantOffsets.forEach((xOffset, pIdx) => {
                 const potHeight = 0.08;
                 const potRadius = 0.05;
-                const plantRadius = 0.07 + Math.random() * 0.03;
+                const plantRadius = 0.07 + random() * 0.03;
                 const plantHeight = benchHeight + potHeight;
 
                 elements.push(

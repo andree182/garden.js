@@ -132,4 +132,8 @@ export const objectConfigurations = [
     { name: "Metal Swing Set", type: "swing_set", props: { materialType: 'iron_round_5cm', materialColor: '#4682B4', numSwings: 3, width: 3.0 } }, // Blue Metal
     { name: "A-Frame Wood Set", type: "swing_set", props: { materialType: 'wood_15cm', standPoles: 'A-frame', depth: 2.0 } },
     { name: "Single Pole Metal", type: "swing_set", props: { materialType: 'iron_round_5cm', standPoles: 'single', width: 2.0, numSwings: 1 } },
+
+    // Greenhouses
+    { name: "Glass Greenhouse", type: "greenhouse", props: {} },
+    { name: "Large Greenhouse", type: "greenhouse", props: { length: 4.5, width: 3.0, height: 2.0, roofHeight: 0.9, frameColor: "#333333" } },
 ];

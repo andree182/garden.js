@@ -2,6 +2,7 @@
 import React, { memo, useMemo, useRef, useLayoutEffect, useState } from 'react';
 import * as THREE from 'three';
 import { ObjectBase } from './ObjectBase';
+import { createRandom } from '../utils';
 import { Cylinder, Sphere, Cone } from '@react-three/drei'; // Use basic shapes
 
 const lerp = THREE.MathUtils.lerp;
@@ -13,9 +14,11 @@ const Y_AXIS = new THREE.Vector3(0, 1, 0);
 
 const MAX_FLOWERS_PER_PATCH = 300;
 
-// Simple reusable geometries
+// // Simple reusable geometries
 const stemGeometry = new THREE.CylinderGeometry(0.008, 0.01, 1, 5); // radiusTop, radiusBottom, height, segments
 stemGeometry.translate(0, 0.5, 0); // Pivot at bottom
+const leafGeometry = new THREE.BoxGeometry(0.03, 0.004, 0.012);
+leafGeometry.translate(0.015, 0, 0); // Pivot at leaf base
 const headGeometrySphere = new THREE.SphereGeometry(1, 8, 6); // Base radius 1, scaled later
 const headGeometryCone = new THREE.ConeGeometry(1, 1, 6); // Base radius 1, height 1, scaled later
 headGeometryCone.translate(0, 0.5, 0); // Pivot cone base
@@ -30,7 +33,10 @@ export const SmallFlower = memo(({ position, isSelected, onSelect, onPointerDown
     density = 150,
     bloomMonths = [4, 5, 6, 7, 8], // Apr-Aug default bloom
 }) => {
+    const random = createRandom(objectId || (position ? position.join(',') : 'obj'));
+
     const stemMeshRef = useRef();
+    const leafMeshRef = useRef();
     const headMeshRef = useRef();
 
     // --- Seasonal/State Calculations ---
@@ -64,44 +70,63 @@ export const SmallFlower = memo(({ position, isSelected, onSelect, onPointerDown
 
     // --- Instance Effects (Stems & Heads) ---
     useLayoutEffect(() => {
-        if (!hasStems || !stemMeshRef.current || !headMeshRef.current || instanceCount === 0) {
+        if (!hasStems || !stemMeshRef.current || !leafMeshRef.current || !headMeshRef.current || instanceCount === 0) {
              if(stemMeshRef.current) stemMeshRef.current.count = 0;
+             if(leafMeshRef.current) leafMeshRef.current.count = 0;
              if(headMeshRef.current) headMeshRef.current.count = 0;
              return;
         }
         const stemMesh = stemMeshRef.current;
+        const leafMesh = leafMeshRef.current;
         const headMesh = headMeshRef.current;
 
         for (let i = 0; i < instanceCount; i++) {
             // Position within patch
-            const radius = Math.sqrt(Math.random()) * patchRadius;
-            const angle = Math.random() * Math.PI * 2;
+            const radius = Math.sqrt(random()) * patchRadius;
+            const angle = random() * Math.PI * 2;
             const x = Math.cos(angle) * radius;
             const z = Math.sin(angle) * radius;
 
             // --- Stem Transform ---
             tempObject.position.set(x, 0, z); // Start stem at base Y
-            tempObject.rotation.set(Math.random()*0.1 - 0.05, 0, Math.random()*0.1 - 0.05); // Slight random lean
+            tempObject.rotation.set(random()*0.1 - 0.05, 0, random()*0.1 - 0.05); // Slight random lean
             tempObject.scale.set(1, currentStemHeight, 1);
             tempObject.updateMatrix();
             stemMesh.setMatrixAt(i, tempObject.matrix);
+
+            // --- Leaf 1 Transform ---
+            tempObject.position.set(x, currentStemHeight * 0.35, z);
+            tempObject.rotation.set(0.15, random() * Math.PI * 2, 0.25);
+            tempObject.scale.set(1.0 * globalAge, 1.0, 1.0);
+            tempObject.updateMatrix();
+            leafMesh.setMatrixAt(i * 2, tempObject.matrix);
+
+            // --- Leaf 2 Transform ---
+            tempObject.position.set(x, currentStemHeight * 0.6, z);
+            tempObject.rotation.set(-0.15, random() * Math.PI * 2, -0.25);
+            tempObject.scale.set(0.75 * globalAge, 1.0, 1.0);
+            tempObject.updateMatrix();
+            leafMesh.setMatrixAt(i * 2 + 1, tempObject.matrix);
 
             // --- Head Transform ---
             // Position head at the top of the scaled stem
             tempObject.position.set(x, currentStemHeight, z);
             // Inherit stem lean, maybe add slight droop?
-            tempObject.rotation.x += Math.random() * 0.1 - 0.05;
-            tempObject.rotation.z += Math.random() * 0.1 - 0.05;
+            tempObject.rotation.x += random() * 0.1 - 0.05;
+            tempObject.rotation.z += random() * 0.1 - 0.05;
             tempObject.scale.setScalar(currentFlowerSize); // Scale head based on blooming/age
             tempObject.updateMatrix();
             headMesh.setMatrixAt(i, tempObject.matrix);
         }
         stemMesh.count = instanceCount;
+        leafMesh.count = instanceCount * 2;
         headMesh.count = isBlooming ? instanceCount : 0; // Only show heads if blooming
 
         stemMesh.instanceMatrix.needsUpdate = true;
+        leafMesh.instanceMatrix.needsUpdate = true;
         headMesh.instanceMatrix.needsUpdate = true;
         stemMesh.computeBoundingSphere();
+        leafMesh.computeBoundingSphere();
         headMesh.computeBoundingSphere();
 
     }, [hasStems, isBlooming, instanceCount, patchRadius, currentStemHeight, currentFlowerSize, stemGeometry, selectedHeadGeometry]); // Add geom dependencies
@@ -112,11 +137,15 @@ export const SmallFlower = memo(({ position, isSelected, onSelect, onPointerDown
         <ObjectBase position={position} isSelected={isSelected} onSelect={onSelect} onPointerDown={onPointerDown} objectId={objectId} type="small_flower" rotationY={rotationY}>
              {/* Stems */}
              {hasStems && instanceCount > 0 && (
-                 <instancedMesh ref={stemMeshRef} args={[stemGeometry, stemMaterial, instanceCount]} castShadow receiveShadow />
+                  <instancedMesh ref={stemMeshRef} args={[stemGeometry, stemMaterial, instanceCount]} castShadow receiveShadow />
+             )}
+             {/* Leaves */}
+             {hasStems && instanceCount > 0 && (
+                  <instancedMesh ref={leafMeshRef} args={[leafGeometry, stemMaterial, instanceCount * 2]} castShadow receiveShadow />
              )}
              {/* Flower Heads (conditionally rendered by count) */}
              {instanceCount > 0 && (
-                 <instancedMesh ref={headMeshRef} args={[selectedHeadGeometry, headMaterial, instanceCount]} castShadow />
+                  <instancedMesh ref={headMeshRef} args={[selectedHeadGeometry, headMaterial, instanceCount]} castShadow />
              )}
         </ObjectBase>
     );
