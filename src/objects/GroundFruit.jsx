@@ -103,7 +103,7 @@ export const GroundFruit = memo(({ position, isSelected, onSelect, onPointerDown
 
     return (
         // Position base at ground level
-        <ObjectBase position={position} rotationY={rotationY} isSelected={isSelected} onSelect={onSelect} onPointerDown={onPointerDown} objectId={objectId} type="ground_fruit" rotationY={rotationY}>
+        <ObjectBase position={position} rotationY={rotationY} isSelected={isSelected} onSelect={onSelect} onPointerDown={onPointerDown} objectId={objectId} type="ground_fruit">
              {/* Leaves */}
              {hasLeaves && leafCount > 0 && leafGeometry && leafMaterial && (
                  <instancedMesh ref={leafMeshRef} args={[leafGeometry, leafMaterial, leafCount]} receiveShadow /> // Leaves receive shadow
