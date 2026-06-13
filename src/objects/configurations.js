@@ -1,72 +1,39 @@
 export const objectConfigurations = [
-    // Trees
-    {
-        name: "Pine Tree (Tall)",
-        type: "tree",
-        props: {
-            maxTrunkHeight: 1.6, maxFoliageHeight: 2.5, maxFoliageRadius: 0.6,
-            foliageColor: "#2E6B2F", trunkColor: "#654321"
-            // Other props will use defaults from schema if not specified
-        }
-    },
-    {
-        name: "Default Conifer",
-        type: "tree",
-        props: {
-            maxTrunkHeight: 0.7, maxFoliageHeight: 1.8, maxFoliageRadius: 1.4,
-            foliageColor: "#556B2F", trunkColor: "#8B4513"
-        }
-    },
-    { name: "Apple Tree", type: "deciduous_tree", props: { fruitType: 'apple', foliageColor: "#6B8E23" } },
-    { name: "Pear Tree", type: "deciduous_tree", props: { fruitType: 'pear', foliageDiameter: 2.2, trunkHeight: 1.2 } },
-    { name: "Tall Pear Tree", type: "deciduous_tree", props: { fruitType: 'pear', foliageScaleY: 1.4, foliageScaleXZ: 0.8, trunkHeight: 1.5, branchDensity: 30 } },
-    { name: "Plum Tree", type: "deciduous_tree", props: { fruitType: 'plum', foliageColor: "#8FBC8F" } },
-    { name: "Oak Tree", type: "deciduous_tree", props: { trunkDiameter: 0.4, foliageDiameter: 2.5, fruitType: 'apple', fruitDensity: 5 } },    
-    { name: "Spreading Oak", type: "deciduous_tree", props: { trunkDiameter: 0.5, trunkHeight: 0.8, foliageScaleXZ: 1.6, foliageScaleY: 0.7, fruitType: 'none', branchDensity: 50, branchLengthMax: 1.0, branchDiameter: 0.1 } },
-    {
-        name: "Default Tree", // Keep the original default
-        type: "tree",
-        props: {} // Will use all defaults from schema
-    },
-    {
-        name: "Birch", // Keep the multi-trunk feel via branches
-        type: "deciduous_tree",
-        props: {
-            // Removed numTrunks/trunkSpread
-            branchDensity: 60, branchLengthMax: 0.9, branchDiameter: 0.06, // More, longer, thinner branches
-            trunkHeight: 1.8, trunkDiameter: 0.18, // Slightly taller/thinner main trunk
-            trunkColor: "#FFFFFF", branchColor: "#F0F0F0", // White/off-white
-            foliageScaleY: 1.2, foliageScaleXZ: 0.9, // Slightly elongated foliage
-            foliageColor: "#98FB98", // Pale green
-            fruitType: 'none'
-        }
-    },
-    // Shrubs
-    {
-        name: "Small Bush",
-        type: "shrub",
-        props: { maxRadius: 0.3, color: "#4F7942" }
-    },
-    {
-        name: "Large Bush",
-        type: "shrub",
-        props: { maxRadius: 0.6, color: "#556B2F" }
-    },
-    // Small Fruit Bushes
-    { name: "Blueberry Bush", type: "small_fruit_bush", props: { bushDiameter: 0.7, bushHeight: 0.6, fruitColor: "#4682B4", fruitSize: 0.01, fruitDensity: 200, fruitPresenceMonths: [7, 8] } },
-    { name: "Raspberry Bush", type: "small_fruit_bush", props: { bushDiameter: 0.5, bushHeight: 0.8, flattenBottom: 0.1, fruitColor: "#E30B5D", fruitSize: 0.012, fruitDensity: 150, fruitPresenceMonths: [7, 8, 9] } },
-    { name: "Red Currant", type: "small_fruit_bush", props: { bushDiameter: 0.6, bushHeight: 0.7, fruitColor: "#C81D11", fruitSize: 0.008, fruitDensity: 250, fruitPresenceMonths: [7] } },
-    { name: "Gooseberry Bush", type: "small_fruit_bush", props: { bushDiameter: 0.8, bushHeight: 0.6, flattenBottom: 0.3, foliageColor: "#90EE90", fruitColor: "#BFFF00", fruitSize: 0.02, fruitDensity: 100, fruitPresenceMonths: [7, 8] } },
+    // Data sourced from public domain databases including USDA PLANTS Database and Wikipedia (CC-BY-SA)
+    
+    // --- Deciduous Trees ---
+    { name: "White Oak (Quercus alba)", type: "deciduous_tree", props: { trunkDiameter: 0.6, trunkHeight: 1.5, foliageDiameter: 4.5, foliageScaleXZ: 1.2, foliageScaleY: 0.8, foliageColor: "#4A7023", branchDensity: 40, branchiness: 0.6, branchLengthMax: 1.2, branchAngleBias: -5, fruitType: 'none' } },
+    { name: "Weeping Willow (Salix babylonica)", type: "deciduous_tree", props: { trunkDiameter: 0.5, trunkHeight: 1.2, foliageDiameter: 3.5, foliageScaleXZ: 1.1, foliageScaleY: 1.3, foliageColor: "#7CB342", branchDensity: 60, branchiness: 0.4, branchLengthMax: 1.5, branchAngleBias: -30, fruitType: 'none' } }, // Branches droop down
+    { name: "Japanese Maple (Acer palmatum)", type: "deciduous_tree", props: { trunkDiameter: 0.15, trunkHeight: 0.8, foliageDiameter: 2.2, foliageScaleXZ: 1.3, foliageScaleY: 0.6, foliageColor: "#8B0000", branchDensity: 30, branchiness: 0.8, branchAngleBias: 5, fruitType: 'none' } }, // Red foliage, spreading
+    { name: "Silver Birch (Betula pendula)", type: "deciduous_tree", props: { trunkDiameter: 0.2, trunkHeight: 2.0, trunkColor: "#E8E8E8", branchColor: "#D3D3D3", foliageDiameter: 1.8, foliageScaleY: 1.4, foliageColor: "#81C784", branchDensity: 45, branchAngleBias: 10, fruitType: 'none' } },
+    
+    // --- Fruit Trees ---
+    { name: "Apple Tree (Malus domestica)", type: "deciduous_tree", props: { trunkDiameter: 0.25, trunkHeight: 1.0, foliageDiameter: 2.5, foliageScaleXZ: 1.0, foliageScaleY: 1.0, foliageColor: "#4CAF50", fruitType: 'apple', fruitDensity: 40, branchiness: 0.5, branchAngleBias: 10 } },
+    { name: "European Pear (Pyrus communis)", type: "deciduous_tree", props: { trunkDiameter: 0.2, trunkHeight: 1.3, foliageDiameter: 2.0, foliageScaleXZ: 0.9, foliageScaleY: 1.3, foliageColor: "#558B2F", fruitType: 'pear', fruitDensity: 35, branchiness: 0.4, branchAngleBias: 15 } },
+    { name: "Plum Tree (Prunus domestica)", type: "deciduous_tree", props: { trunkDiameter: 0.2, trunkHeight: 1.1, foliageDiameter: 2.2, foliageScaleXZ: 1.1, foliageScaleY: 0.9, foliageColor: "#689F38", fruitType: 'plum', fruitDensity: 50, branchiness: 0.6 } },
 
-    // Ground Fruit
-    { name: "Strawberry Patch", type: "ground_fruit", props: {} }, // Use defaults
-    { name: "Alpine Strawberry", type: "ground_fruit", props: { patchDiameter: 0.3, fruitColor: "#FF4500", fruitSize: 0.01, fruitDensity: 120, leafDensity: 100 } },
+    // --- Conifers ---
+    { name: "Eastern White Pine (Pinus strobus)", type: "tree", props: { maxTrunkHeight: 1.8, maxFoliageHeight: 3.5, maxFoliageRadius: 1.0, foliageColor: "#2E5C32", trunkColor: "#4E342E" } },
+    { name: "Norway Spruce (Picea abies)", type: "tree", props: { maxTrunkHeight: 0.5, maxFoliageHeight: 4.0, maxFoliageRadius: 1.5, foliageColor: "#1B5E20", trunkColor: "#3E2723" } },
+    { name: "Default Conifer", type: "tree", props: {} },
 
-    // Small Flowers
-    { name: "Pink Flowers", type: "small_flower", props: { flowerColor: "#FFB6C1", patchDiameter: 0.5, density: 180 } }, // Light Pink
-    { name: "Tulips (Red)", type: "small_flower", props: { flowerColor: "#FF0000", flowerShape: 'cone', flowerSize: 0.04, stemHeight: 0.25, patchDiameter: 0.3, density: 80, bloomMonths: [4,5] } },
-    { name: "Lavender Patch", type: "small_flower", props: { flowerColor: "#E6E6FA", flowerShape: 'cone', flowerSize: 0.015, stemHeight: 0.2, patchDiameter: 0.6, density: 200, stemColor: "#B0C4DE", bloomMonths: [6,7,8] } },
-    { name: "Coneflowers", type: "small_flower", props: { flowerColor: "#DA70D6", flowerShape: 'cone', flowerSize: 0.05, stemHeight: 0.3, patchDiameter: 0.4, density: 70, bloomMonths: [7,8,9] } }, // Orchid color
+    // --- Shrubs & Hedges ---
+    { name: "Boxwood (Buxus sempervirens)", type: "hedge", props: { length: 1.0, width: 1.0, height: 0.8, color: "#33691E" } },
+    { name: "Hydrangea (H. macrophylla)", type: "shrub", props: { maxRadius: 0.6, color: "#388E3C" } },
+    { name: "Lilac (Syringa vulgaris)", type: "shrub", props: { maxRadius: 0.9, color: "#4CAF50" } },
+
+    // --- Small Fruit Bushes ---
+    { name: "Highbush Blueberry (V. corymbosum)", type: "small_fruit_bush", props: { bushDiameter: 1.0, bushHeight: 1.2, fruitColor: "#4682B4", fruitSize: 0.012, fruitDensity: 250, fruitPresenceMonths: [6, 7] } },
+    { name: "Red Raspberry (Rubus idaeus)", type: "small_fruit_bush", props: { bushDiameter: 0.8, bushHeight: 1.0, flattenBottom: 0.1, fruitColor: "#E30B5D", fruitSize: 0.015, fruitDensity: 150, fruitPresenceMonths: [7, 8, 9] } },
+    { name: "Red Currant (Ribes rubrum)", type: "small_fruit_bush", props: { bushDiameter: 0.7, bushHeight: 0.8, fruitColor: "#C81D11", fruitSize: 0.01, fruitDensity: 300, fruitPresenceMonths: [6, 7] } },
+
+    // --- Ground Fruit ---
+    { name: "Garden Strawberry (F. × ananassa)", type: "ground_fruit", props: { patchDiameter: 0.4, fruitColor: "#FF4500", fruitSize: 0.015, fruitDensity: 100, leafDensity: 120 } },
+
+    // --- Flowers ---
+    { name: "Lavender (Lavandula angustifolia)", type: "small_flower", props: { flowerColor: "#967BB6", flowerShape: 'cone', flowerSize: 0.015, stemHeight: 0.3, patchDiameter: 0.6, density: 250, stemColor: "#8D9E8D", bloomMonths: [6,7,8] } },
+    { name: "Common Sunflower (H. annuus)", type: "small_flower", props: { flowerColor: "#FDD835", flowerShape: 'cone', flowerSize: 0.08, stemHeight: 1.8, patchDiameter: 0.3, density: 15, stemColor: "#7CB342", bloomMonths: [7,8,9] } },
+    { name: "Tulip (Tulipa)", type: "small_flower", props: { flowerColor: "#F44336", flowerShape: 'cone', flowerSize: 0.04, stemHeight: 0.35, patchDiameter: 0.3, density: 60, bloomMonths: [4,5] } },
 
     // Grass
     {
