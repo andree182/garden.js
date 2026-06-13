@@ -1,5 +1,5 @@
 import { OrthographicCamera, PerspectiveCamera, Plane, OrbitControls } from "@react-three/drei";
-import { useThree } from "@react-three/fiber";
+import { useThree, useFrame } from "@react-three/fiber";
 import React, { useRef, useState, useCallback, useEffect } from "react";
 import * as THREE from "three";
 import { getWorldYBase, DRAG_PLANE_OFFSET, HEIGHT_MODIFIER, CELL_SIZE } from "./PlanEditor";
@@ -25,6 +25,59 @@ export function Experience({
     const [paintDirection, setPaintDirection] = useState(1);
     const pointerRef = useRef({ x: 0, y: 0 });
     const ROTATION_SENSITIVITY = 1;
+
+    // --- Camera Sync State ---
+    const lastCameraState = useRef({
+        target: new THREE.Vector3(0, 0, 0),
+        position: new THREE.Vector3(15, 20, 25),
+        zoom: 50,
+        distance: 35,
+        initialized: false
+    });
+
+    useFrame((state) => {
+        if (orbitControlsRef.current) {
+            const controls = orbitControlsRef.current;
+            lastCameraState.current.target.copy(controls.target);
+            lastCameraState.current.position.copy(state.camera.position);
+            lastCameraState.current.zoom = state.camera.zoom;
+            lastCameraState.current.distance = state.camera.position.distanceTo(controls.target);
+            lastCameraState.current.initialized = true;
+        }
+    });
+
+    useEffect(() => {
+        if (!orbitControlsRef.current || !lastCameraState.current.initialized) return;
+
+        const controls = orbitControlsRef.current;
+        const state = lastCameraState.current;
+
+        if (isOrthographic) {
+            // Transitioning from Perspective to Orthographic
+            controls.target.copy(state.target);
+            
+            // Calculate equivalent zoom for OrthographicCamera based on last perspective distance
+            const calculatedZoom = Math.max(5, Math.min(200, 1500 / state.distance));
+            camera.zoom = calculatedZoom;
+            
+            // Place orthographic camera directly above the target (slightly offset in Z to avoid gimbal lock)
+            camera.position.set(state.target.x, state.target.y + 50, state.target.z + 0.01);
+            camera.updateProjectionMatrix();
+            controls.update();
+        } else {
+            // Transitioning from Orthographic to Perspective
+            controls.target.copy(state.target);
+            
+            // Calculate perspective distance based on orthographic zoom
+            const calculatedDistance = Math.max(5, Math.min(200, 1500 / state.zoom));
+            
+            // Place perspective camera at a nice default angle from target
+            const dir = new THREE.Vector3(15, 20, 25).normalize();
+            camera.position.copy(state.target).addScaledVector(dir, calculatedDistance);
+            camera.updateProjectionMatrix();
+            controls.update();
+        }
+    }, [isOrthographic, camera]);
 
     // --- Event Handlers (Now strictly check currentMode) ---
     const handleObjectPointerDown = useCallback(
@@ -360,6 +413,8 @@ export function Experience({
             <OrbitControls
                 ref={orbitControlsRef}
                 enabled={!draggingInfo && !isPaintingTerrain}
+                minPolarAngle={isOrthographic ? 0.01 : 0}
+                maxPolarAngle={isOrthographic ? 0.01 : Math.PI / 2.1}
                 makeDefault />
         </>
     );
