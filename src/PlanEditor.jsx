@@ -155,6 +155,7 @@ export default function PlanEditor() {
     const [isOrthographic, setIsOrthographic] = useState(false);
     const [showObjectNames, setShowObjectNames] = useState(false);
     const [objectFilter, setObjectFilter] = useState('');
+    const [exportText, setExportText] = useState(null);
     const [sunAzimuth, setSunAzimuth] = useState(45); // Default: Northeast-ish
     const [sunElevation, setSunElevation] = useState(60); // Default: Fairly high sun
     const [currentMonth, setCurrentMonth] = useState(6);
@@ -784,6 +785,121 @@ export default function PlanEditor() {
         );
     };
 
+    const renderExportPopup = () => {
+        if (!exportText) return null;
+        
+        return (
+            <div style={{
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundColor: 'rgba(0, 0, 0, 0.6)',
+                backdropFilter: 'blur(5px)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 1000,
+                fontFamily: 'Inter, sans-serif'
+            }}>
+                <div style={{
+                    background: 'linear-gradient(135deg, rgba(30, 30, 30, 0.9), rgba(20, 20, 20, 0.9))',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    borderRadius: '12px',
+                    padding: '24px',
+                    width: '500px',
+                    maxWidth: '90%',
+                    boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.37)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '16px',
+                    color: '#f5f5f5'
+                }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <strong style={{ fontSize: '16px', letterSpacing: '0.5px' }}>Exported Object List</strong>
+                        <button 
+                            onClick={() => setExportText(null)}
+                            style={{
+                                background: 'transparent',
+                                border: 'none',
+                                color: '#aaa',
+                                fontSize: '20px',
+                                cursor: 'pointer',
+                                padding: '0 4px',
+                                transition: 'color 0.2s'
+                            }}
+                            onMouseEnter={(e) => e.target.style.color = '#fff'}
+                            onMouseLeave={(e) => e.target.style.color = '#aaa'}
+                        >
+                            &times;
+                        </button>
+                    </div>
+                    
+                    <textarea 
+                        readOnly
+                        value={exportText}
+                        style={{
+                            width: '100%',
+                            height: '250px',
+                            background: '#151515',
+                            border: '1px solid #333',
+                            borderRadius: '6px',
+                            padding: '12px',
+                            color: '#00ff66',
+                            fontFamily: 'monospace',
+                            fontSize: '12px',
+                            resize: 'none',
+                            outline: 'none',
+                            boxSizing: 'border-box'
+                        }}
+                        onClick={(e) => e.target.select()}
+                    />
+                    
+                    <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                        <button
+                            onClick={() => {
+                                navigator.clipboard.writeText(exportText);
+                                alert("Copied to clipboard!");
+                            }}
+                            style={{
+                                background: 'linear-gradient(135deg, #4CAF50, #45a049)',
+                                color: 'white',
+                                border: 'none',
+                                padding: '8px 16px',
+                                borderRadius: '6px',
+                                cursor: 'pointer',
+                                fontWeight: 'bold',
+                                transition: 'transform 0.1s, filter 0.2s',
+                            }}
+                            onMouseEnter={(e) => e.target.style.filter = 'brightness(1.1)'}
+                            onMouseLeave={(e) => e.target.style.filter = 'none'}
+                        >
+                            Copy to Clipboard
+                        </button>
+                        <button
+                            onClick={() => setExportText(null)}
+                            style={{
+                                background: '#333',
+                                color: '#ccc',
+                                border: 'none',
+                                padding: '8px 16px',
+                                borderRadius: '6px',
+                                cursor: 'pointer',
+                                fontWeight: 'bold',
+                                transition: 'background 0.2s',
+                            }}
+                            onMouseEnter={(e) => e.target.style.background = '#444'}
+                            onMouseLeave={(e) => e.target.style.background = '#333'}
+                        >
+                            Close
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
     const handleExportObjectList = useCallback(() => {
         const allObjects = sceneLogicRef.current?.getObjects();
         if (!allObjects || allObjects.length === 0) {
@@ -824,18 +940,10 @@ export default function PlanEditor() {
             positions: data.coordinates, // Rename field to 'positions'
         }));
 
-        // Trigger download
+        // Show export text popup instead of triggering download
         try {
             const jsonString = JSON.stringify(exportData, null, 2);
-            const blob = new Blob([jsonString], { type: "application/json" });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = "object_list_export.json";
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+            setExportText(jsonString);
         } catch (error) {
             console.error("Failed to export object list:", error);
             alert("Failed to generate export file.");
@@ -1306,6 +1414,8 @@ export default function PlanEditor() {
             </div>
 
             {renderAddObjectList()}
+
+            {renderExportPopup()}
 
             {/* INTRO OVERLAY */}
             {showIntro && (
