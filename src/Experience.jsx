@@ -92,7 +92,7 @@ export function Experience({
                     ...selectedObjectToAdd.props, // Spread the predefined properties
                 };
                 sceneLogicRef.current.addObject(newObjectData);
-                onInteractionEnd(); // Reset mode/selection after adding
+                // onInteractionEnd(); // Keep the object selection for further placing (do not reset mode/selection after adding)
             } else if (currentMode === "terrain") {
                 event.stopPropagation();
                 setIsPaintingTerrain(true);
