@@ -15,6 +15,7 @@ import * as THREE from "three";
 // Import object components AND their editor schemas
 import { ObjectComponents, objectConfigurations } from "./objects";
 import { Experience } from "./Experience";
+import { getOrchardExample, getCourtyardExample } from "./exampleProjects";
 
 const MONTH_NAMES = [
     "Jan",
@@ -246,6 +247,25 @@ export default function PlanEditor() {
             if (fileInputRef.current) fileInputRef.current.value = "";
         };
         reader.readAsText(file);
+    }, []);
+
+    const loadPredefinedExample = useCallback((loadedData) => {
+        try {
+            const newSize = sceneLogicRef.current?.load(loadedData);
+            if (newSize) {
+                setDesiredWidth(newSize.newWidth);
+                setDesiredHeight(newSize.newHeight);
+                setCurrentGridSize({
+                    w: newSize.newWidth,
+                    h: newSize.newHeight,
+                });
+            }
+            setSelectedObjectId(null);
+            console.log("Loaded example project successfully");
+        } catch (error) {
+            console.error("Failed to load example project:", error);
+            alert(`Failed to load example: ${error.message}`);
+        }
     }, []);
 
     // Handler to change the main mode
@@ -1433,8 +1453,33 @@ export default function PlanEditor() {
                         maxWidth: '500px', textAlign: 'center', border: '1px solid #555'
                     }}>
                         <h2>Hello there!</h2>
-                        <p>This is a simpla garden plan edito. At the moment it's PoC, alpha state...</p>
-                        <button onClick={handleCloseIntro} style={{ padding: '10px 20px', marginTop: '20px', cursor: 'pointer' }}>Got it!</button>
+                        <p>This is a simple garden plan editor. At the moment it's PoC, alpha state...</p>
+                        
+                        <div style={{ marginTop: '20px', display: 'flex', flexDirection: 'column', gap: '10px', alignItems: 'center' }}>
+                            <strong>Try an Example Project:</strong>
+                            <div style={{ display: 'flex', gap: '10px' }}>
+                                <button 
+                                    onClick={() => {
+                                        loadPredefinedExample(getOrchardExample());
+                                        handleCloseIntro();
+                                    }} 
+                                    style={{ padding: '8px 16px', cursor: 'pointer', background: '#4CAF50', color: 'white', border: 'none', borderRadius: '4px', fontWeight: 'bold' }}
+                                >
+                                    Fruit Orchard
+                                </button>
+                                <button 
+                                    onClick={() => {
+                                        loadPredefinedExample(getCourtyardExample());
+                                        handleCloseIntro();
+                                    }} 
+                                    style={{ padding: '8px 16px', cursor: 'pointer', background: '#4CAF50', color: 'white', border: 'none', borderRadius: '4px', fontWeight: 'bold' }}
+                                >
+                                    Cozy Courtyard
+                                </button>
+                            </div>
+                        </div>
+
+                        <button onClick={handleCloseIntro} style={{ padding: '8px 20px', marginTop: '25px', cursor: 'pointer', background: '#555', color: '#fff', border: '1px solid #777', borderRadius: '4px' }}>Got it!</button>
                    </div>
                 </div>
             )}
